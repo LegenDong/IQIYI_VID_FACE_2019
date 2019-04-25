@@ -71,9 +71,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='PyTorch Template')
 
     parser.add_argument('-r', '--root', default='/data/dcq/DataSets/iQIYI/', type=str,
-                        help='path to load data (default: /data/dcq/DataSets/IQIYI/)')
+                        help='path to load data (default: /data/dcq/DataSets/iQIYI/)')
     parser.add_argument('-s', '--save_dir', default='/data/dcq/Models/iQIYI/', type=str,
-                        help='path to save model (default: /data/dcq/Models/IQIYI/)')
+                        help='path to save model (default: /data/dcq/Models/iQIYI/)')
     parser.add_argument('-d', '--device', default=None, type=str,
                         help='indices of GPUs to enable (default: all)')
 
@@ -87,5 +87,6 @@ if __name__ == '__main__':
     np.random.seed(SEED)
     torch.manual_seed(SEED)
     torch.cuda.manual_seed(SEED)
+    torch.cuda.manual_seed_all(SEED)
 
     main(args.root, args.save_dir)

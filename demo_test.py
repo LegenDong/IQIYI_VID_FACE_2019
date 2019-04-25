@@ -50,7 +50,7 @@ def main(data_root, load_path):
         else:
             results_dict[key].append((*result[1:],))
 
-    with open('./my_result.txt', 'w', encoding='utf-8') as f:
+    with open('./results/result.txt', 'w', encoding='utf-8') as f:
         for key, value in sorted(results_dict.items(), key=lambda item: item[0]):
             value.sort(key=lambda k: k[0], reverse=True)
             value = ['{}.mp4'.format(i[1]) for i in value[:100]]
@@ -60,11 +60,9 @@ def main(data_root, load_path):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='PyTorch Template')
-    parser.add_argument('-r', '--root', default='/data/dcq/DataSets/iQIYI/',
-                        type=str,
-                        help='path to load data (default: /data/dcq/DataSets/IQIYI/)')
-    parser.add_argument('-l', '--load_path', default=None, required=True,
-                        type=str,
+    parser.add_argument('-r', '--root', default='/data/dcq/DataSets/iQIYI/', type=str,
+                        help='path to load data (default: /data/dcq/DataSets/iQIYI/)')
+    parser.add_argument('-l', '--load_path', default=None, required=True, type=str,
                         help='path to save model (default: None)')
     parser.add_argument('-d', '--device', default=None, type=str,
                         help='indices of GPUs to enable (default: all)')

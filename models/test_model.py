@@ -9,6 +9,8 @@ from torch import nn
 
 from models.metrics import ArcMarginProduct
 
+__all__ = ['TestModel']
+
 
 class TestModel(nn.Module):
     def __init__(self, is_train=True):
