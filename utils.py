@@ -13,7 +13,8 @@ import numpy as np
 import torch
 
 __all__ = ['check_exists', 'load_train_gt_from_txt', 'load_val_gt_from_txt',
-           'load_face_from_pickle', 'default_pre_progress', 'default_transforms',
+           'load_face_from_pickle', 'load_head_from_pickle', 'load_body_from_pickle',
+           'load_audio_from_pickle', 'default_pre_progress', 'default_transforms',
            'default_target_transforms', 'save_model', 'max_score_pre_progress',
            'default_get_result', 'average_pre_progress', 'weighted_average_pre_progress']
 
@@ -222,5 +223,91 @@ def load_face_from_pickle(file_path):
             'video_ind': video_ind,
             'video_name': video_name.decode("utf-8"),
             'frame_infos': frame_infos})
+
+    return video_infos
+
+
+def load_head_from_pickle(file_path):
+    assert check_exists(file_path)
+
+    with open(file_path, 'rb') as fin:
+        head_feats_dict = pickle.load(fin, encoding='bytes')
+
+    video_infos = []
+
+    for video_ind, video_name in enumerate(head_feats_dict):
+        head_feats = head_feats_dict[video_name]
+        last_fame_num = 0
+        frame_infos = []
+        for ind, head_score in enumerate(head_feats):
+            [frame_str, bbox, det_score, feat] = head_score
+            [x1, y1, x2, y2] = bbox
+            assert (int(frame_str) >= last_fame_num)
+            last_fame_num = int(frame_str)
+            assert (0 <= x1 <= x2)
+            assert (0 <= y1 <= y2)
+            assert (type(det_score) == float)
+            assert (feat.dtype == np.float16 and feat.shape[0] == 512)
+
+            frame_infos.append({'frame_id': last_fame_num,
+                                'bbox': bbox,
+                                'det_score': det_score,
+                                'feat': feat})
+        video_infos.append({
+            'video_ind': video_ind,
+            'video_name': video_name.decode("utf-8"),
+            'frame_infos': frame_infos})
+
+    return video_infos
+
+
+def load_body_from_pickle(file_path):
+    assert check_exists(file_path)
+
+    with open(file_path, 'rb') as fin:
+        body_feats_dict = pickle.load(fin, encoding='bytes')
+
+    video_infos = []
+
+    for video_ind, video_name in enumerate(body_feats_dict):
+        body_feats = body_feats_dict[video_name]
+        last_fame_num = 0
+        frame_infos = []
+        for ind, head_score in enumerate(body_feats):
+            [frame_str, bbox, feat] = head_score
+            [x1, y1, x2, y2] = bbox
+            assert (int(frame_str) >= last_fame_num)
+            last_fame_num = int(frame_str)
+            assert (0 <= x1 <= x2)
+            assert (0 <= y1 <= y2)
+            assert (feat.dtype == np.float16 and feat.shape[0] == 512)
+
+            frame_infos.append({'frame_id': last_fame_num,
+                                'bbox': bbox,
+                                'feat': feat})
+        video_infos.append({
+            'video_ind': video_ind,
+            'video_name': video_name.decode("utf-8"),
+            'frame_infos': frame_infos})
+
+    return video_infos
+
+
+def load_audio_from_pickle(file_path):
+    assert check_exists(file_path)
+
+    with open(file_path, 'rb') as fin:
+        audio_feats_dict = pickle.load(fin, encoding='bytes')
+
+    video_infos = []
+
+    for video_ind, video_name in enumerate(audio_feats_dict):
+        audio_feat = audio_feats_dict[video_name]
+        assert (audio_feat.dtype == np.float16 and audio_feat.shape[0] == 512)
+
+        video_infos.append({
+            'video_ind': video_ind,
+            'video_name': video_name.decode("utf-8"),
+            'feat': audio_feat})
 
     return video_infos
