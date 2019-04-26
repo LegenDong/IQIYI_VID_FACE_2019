@@ -2,7 +2,7 @@
 # @Time    : 2019/4/20 20:36
 # @Author  : LegenDong
 # @User    : legendong
-# @File    : demo_train.py
+# @File    : demo_train_arcface.py
 # @Software: PyCharm
 import argparse
 import os
@@ -14,61 +14,51 @@ from torch import optim
 from torch.utils.data import DataLoader
 
 from datasets import IQiYiFaceDataset
-from models import TestSplitModel, FocalLoss
+from models import ArcFaceModel, FocalLoss, ArcMarginProduct
 from utils import check_exists, save_model, weighted_average_pre_progress
 
 
-def main():
+def main(args):
     if not check_exists(args.save_dir):
         os.makedirs(args.save_dir)
 
     dataset = IQiYiFaceDataset(args.root, 'train', pre_progress=weighted_average_pre_progress)
-    data_loader = DataLoader(dataset, batch_size=4096, shuffle=True, num_workers=4)
+    data_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
 
     log_step = len(data_loader) // 10 if len(data_loader) > 10 else 1
 
-    model = TestSplitModel()
-    focal_loss = FocalLoss()
-    # center_loss = CenterLoss(num_classes=args.num_classes, feat_dim=args.feat_dim)
-    # ring_loss = RingLoss()
+    model = ArcFaceModel(args.feat_dim, args.num_classes)
+    metric_func = ArcMarginProduct()
+    loss_func = FocalLoss()
 
-    optimizer_model = optim.SGD(model.parameters(), lr=args.lr_model, momentum=0.9, weight_decay=1e-5)
-    # optimizer_centloss = torch.optim.SGD(center_loss.parameters(), lr=args.lr_cent)
-    lr_scheduler = optim.lr_scheduler.StepLR(optimizer_model, 20)
+    optimizer_model = optim.SGD(model.parameters(), lr=args.learning_rate, momentum=0.9, weight_decay=1e-5)
+    lr_scheduler = optim.lr_scheduler.StepLR(optimizer_model, 40)
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     model = model.to(device)
 
     for epoch_idx in range(200):
         total_loss = .0
-        for batch_idx, (feats_in, labels, _) in enumerate(data_loader):
+        for batch_idx, (feats, labels, _) in enumerate(data_loader):
 
-            feats_in = feats_in.to(device)
+            feats = feats.to(device)
             labels = labels.to(device)
 
             optimizer_model.zero_grad()
-            # optimizer_centloss.zero_grad()
 
-            feats_out, pred = model(feats_in, labels)
+            outputs = model(feats)
+            outputs_metric = metric_func(outputs, labels)
+            local_loss = loss_func(outputs_metric, labels)
 
-            loss_focal = focal_loss(pred, labels)
-            # loss_center = args.weight_cent * center_loss(feats_out, labels)
-            # loss_ring = args.weight_ring * ring_loss(pred)
-
-            loss = loss_focal
-            loss.backward()
-
+            local_loss.backward()
             optimizer_model.step()
-            # for param in center_loss.parameters():
-            #     param.grad.data *= (1. / args.weight_cent)
-            # optimizer_centloss.step()
 
-            total_loss += loss.item()
+            total_loss += local_loss.item()
 
             if batch_idx % log_step == 0 and batch_idx != 0:
                 print('Epoch: {} [{}/{} ({:.0f}%)] Loss: {:.6f}'
-                      .format(epoch_idx, batch_idx * 4096, len(dataset),
-                              100.0 * batch_idx / len(data_loader), loss.item()))
+                      .format(epoch_idx, batch_idx * args.batch_size, len(dataset),
+                              100.0 * batch_idx / len(data_loader), local_loss.item()))
         log = {'epoch': epoch_idx,
                'lr': optimizer_model.param_groups[0]['lr'],
                'loss': total_loss / len(data_loader)}
@@ -88,12 +78,11 @@ if __name__ == '__main__':
     parser.add_argument('-s', '--save_dir', default='/data/dcq/Models/iQIYI/', type=str,
                         help='path to save model (default: /data/dcq/Models/iQIYI/)')
     parser.add_argument('-d', '--device', default=None, type=str, help='indices of GPUs to enable (default: all)')
-    parser.add_argument('-n', '--num_classes', default=10035, type=int, help='number of classes')
-    parser.add_argument('-dim', '--feat_dim', default=512, type=int, help='dim of feature')
-    parser.add_argument('--lr-model', type=float, default=0.1, help="learning rate for model")
-    parser.add_argument('--weight-cent', type=float, default=0., help="weight for center loss")
-    parser.add_argument('--weight-ring', type=float, default=1., help="weight for ring loss")
-    parser.add_argument('--lr-cent', type=float, default=0.1, help="learning rate for center loss")
+    parser.add_argument('-n', '--num_classes', default=10035, type=int, help='number of classes (default: 10035)')
+    parser.add_argument('-b', '--batch_size', default=4096, type=int, help='dim of feature (default: 4096)')
+    parser.add_argument('-dim', '--feat_dim', default=512, type=int, help='dim of feature (default: 512)')
+    parser.add_argument('-lr', '--learning_rate', type=float, default=0.1,
+                        help="learning rate for model (default: 0.1)")
     args = parser.parse_args()
 
     if args.device:
@@ -106,4 +95,4 @@ if __name__ == '__main__':
     torch.cuda.manual_seed(SEED)
     torch.cuda.manual_seed_all(SEED)
 
-    main()
+    main(args)
