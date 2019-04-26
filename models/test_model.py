@@ -10,6 +10,8 @@ import torch.nn.functional as F
 
 from models.metrics import ArcMarginProduct, ArcMarginSplitProduct
 
+__all__ = ['TestModel']
+
 
 class TestModel(nn.Module):
     def __init__(self, is_train=True):
