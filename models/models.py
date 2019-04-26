@@ -38,11 +38,10 @@ class BaseModel(nn.Module):
 
 
 class ArcFaceModel(nn.Module):
-    def __init__(self, in_features, out_features, is_train=True, ):
+    def __init__(self, in_features, out_features, ):
         super(ArcFaceModel, self).__init__()
         self.in_features = in_features
         self.out_features = out_features
-        self.is_train = is_train
 
         self.fc = nn.Sequential(nn.Linear(self.in_features, self.in_features * 2),
                                 nn.BatchNorm1d(self.in_features * 2),
@@ -64,8 +63,5 @@ class ArcFaceModel(nn.Module):
         output = self.fc(x)
         output = x + output
         output = F.linear(F.normalize(output), F.normalize(self.weight))
-
-        if not self.is_train:
-            output = F.softmax(output, -1)
 
         return output

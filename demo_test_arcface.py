@@ -23,7 +23,8 @@ def main(data_root, load_path):
     dataset = IQiYiFaceDataset(data_root, 'val', min_value=20., pre_progress=weighted_average_pre_progress, )
     data_loader = DataLoader(dataset, batch_size=20480, shuffle=True, num_workers=4)
 
-    model = ArcFaceModel(512, 10034 + 1, False)
+    model = ArcFaceModel(512, 10034 + 1)
+    metric_func = torch.nn.Softmax(-1)
 
     state_dict = torch.load(load_path)
     model.load_state_dict(state_dict)
@@ -37,6 +38,7 @@ def main(data_root, load_path):
         for batch_idx, (feats, _, video_names) in enumerate(data_loader):
             feats = feats.to(device)
             output = model(feats)
+            output = metric_func(output)
 
             results = default_get_result(output.cpu(), video_names)
             all_results += list(results)
