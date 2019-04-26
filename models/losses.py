@@ -9,7 +9,6 @@ import torch.nn as nn
 from torch.autograd.function import Function as F
 from torch.nn import Parameter
 
-
 __all__ = ['FocalLoss', 'CenterLoss', 'GitLoss', 'RingLoss']
 
 
@@ -30,10 +29,8 @@ class FocalLoss(nn.Module):
 class CenterLoss(nn.Module):
     """
     Center loss.
-
     Reference:
     Wen et al. A Discriminative Feature Learning Approach for Deep Face Recognition. ECCV 2016.
-
     """
 
     def __init__(self, num_classes=10, feat_dim=2, use_gpu=True):
@@ -77,7 +74,6 @@ class CenterLoss(nn.Module):
 class RingLoss(nn.Module):
     """
     Ring Loss
-
     Reference:
     Zheng et al. Ring loss: Convex Feature Normalization for Face Recognition. CVPR 2018
     """
@@ -122,18 +118,20 @@ class RingLoss(nn.Module):
 
 
 class GitLoss(nn.Module):
-    """Git loss.
+    """
+    Git loss
+    Reference:
+    Calefati et al. Git loss for deep face recognition.
+    """
 
-        Reference:
-        Calefati et al. Git loss for deep face recognition.
-
-        Args:
-            num_classes (int): number of classes.
-            feat_dim (int): feature dimension.
-            lambda_c (float): super parameter
-            lambda_g (float): super parameter
-        """
     def __init__(self, num_classes=10035, feat_dim=512, lambda_c=1, lambda_g=1):
+        """
+
+        :param num_classes: number of classes
+        :param feat_dim: feature dimension
+        :param lambda_c: super parameter
+        :param lambda_g: super parameter
+        """
         super(GitLoss, self).__init__()
         self.num_classes = num_classes
         self.feat_dim = feat_dim
@@ -141,6 +139,5 @@ class GitLoss(nn.Module):
         self.lamda_g = lambda_g
 
     def forward(self, x, labels):
-
         # todo
         pass

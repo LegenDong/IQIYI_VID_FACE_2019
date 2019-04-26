@@ -15,7 +15,8 @@ from torch.nn import Parameter
 __all__ = ['ArcMarginProduct', 'ArcMarginSplitProduct']
 
 """
-reference: https://github.com/ronghuaiyang/arcface-pytorch/blob/master/models/metrics.py
+reference: 
+https://github.com/ronghuaiyang/arcface-pytorch/blob/master/models/metrics.py
 """
 
 
@@ -61,6 +62,7 @@ class ArcMarginProduct(nn.Module):
         return output
 
 
+# TODO: m_sphere not implement yet
 class ArcMarginSplitProduct(nn.Module):
     def __init__(self, in_features, out_features, s=30.0, m_sphere=1., m_arc=0.50, m_cosine=0, easy_margin=False):
         """
@@ -68,7 +70,7 @@ class ArcMarginSplitProduct(nn.Module):
         :param in_features:     size of each input sample
         :param out_features:    size of each output sample
         :param s:               norm of input feature
-        :param m_sphere:        margin of sphere-face loss todo: not implement yet
+        :param m_sphere:        margin of sphere-face loss
         :param m_arc:           margin of arc-face loss
         :param m_cosine:        margin of cosine-face loss
         :param easy_margin:

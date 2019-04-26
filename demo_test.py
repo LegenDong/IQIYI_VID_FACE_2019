@@ -20,8 +20,7 @@ from utils import check_exists, default_get_result, weighted_average_pre_progres
 def main(data_root, load_path):
     assert check_exists(load_path)
 
-    dataset = IQiYiFaceDataset(data_root, 'val', min_value=20.,
-                               pre_progress=weighted_average_pre_progress, )
+    dataset = IQiYiFaceDataset(data_root, 'val', min_value=20., pre_progress=weighted_average_pre_progress, )
     data_loader = DataLoader(dataset, batch_size=20480, shuffle=True, num_workers=4)
 
     model = TestModel(is_train=False)
@@ -64,8 +63,7 @@ if __name__ == '__main__':
                         help='path to load data (default: /data/dcq/DataSets/iQIYI/)')
     parser.add_argument('-l', '--load_path', default=None, required=True, type=str,
                         help='path to save model (default: None)')
-    parser.add_argument('-d', '--device', default=None, type=str,
-                        help='indices of GPUs to enable (default: all)')
+    parser.add_argument('-d', '--device', default=None, type=str, help='indices of GPUs to enable (default: all)')
 
     args = parser.parse_args()
 

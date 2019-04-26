@@ -14,7 +14,7 @@ from torch import optim
 from torch.utils.data import DataLoader
 
 from datasets import IQiYiFaceDataset
-from models import TestModel, TestSplitModel, FocalLoss, CenterLoss, RingLoss
+from models import TestSplitModel, FocalLoss
 from utils import check_exists, save_model, weighted_average_pre_progress
 
 
@@ -22,8 +22,7 @@ def main():
     if not check_exists(args.save_dir):
         os.makedirs(args.save_dir)
 
-    dataset = IQiYiFaceDataset(args.root, 'train',
-                               pre_progress=weighted_average_pre_progress)
+    dataset = IQiYiFaceDataset(args.root, 'train', pre_progress=weighted_average_pre_progress)
     data_loader = DataLoader(dataset, batch_size=4096, shuffle=True, num_workers=4)
 
     log_step = len(data_loader) // 10 if len(data_loader) > 10 else 1
@@ -88,12 +87,9 @@ if __name__ == '__main__':
                         help='path to load data (default: /data/dcq/DataSets/iQIYI/)')
     parser.add_argument('-s', '--save_dir', default='/data/dcq/Models/iQIYI/', type=str,
                         help='path to save model (default: /data/dcq/Models/iQIYI/)')
-    parser.add_argument('-d', '--device', default=None, type=str,
-                        help='indices of GPUs to enable (default: all)')
-    parser.add_argument('-n', '--num_classes', default=10035, type=int,
-                        help='number of classes')
-    parser.add_argument('-dim', '--feat_dim', default=512, type=int,
-                        help='dim of feature')
+    parser.add_argument('-d', '--device', default=None, type=str, help='indices of GPUs to enable (default: all)')
+    parser.add_argument('-n', '--num_classes', default=10035, type=int, help='number of classes')
+    parser.add_argument('-dim', '--feat_dim', default=512, type=int, help='dim of feature')
     parser.add_argument('--lr-model', type=float, default=0.1, help="learning rate for model")
     parser.add_argument('--weight-cent', type=float, default=0., help="weight for center loss")
     parser.add_argument('--weight-ring', type=float, default=1., help="weight for ring loss")

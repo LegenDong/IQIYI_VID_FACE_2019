@@ -30,8 +30,7 @@ def check_exists(file_paths):
 
 def save_model(model, save_path, name, epoch):
     save_time = datetime.now().strftime('%m%d_%H%M%S')
-    save_name = os.path.join(save_path,
-                             '{}_{:0>4d}_{}.pth'.format(name, epoch, save_time))
+    save_name = os.path.join(save_path, '{}_{:0>4d}_{}.pth'.format(name, epoch, save_time))
     torch.save(model.state_dict(), save_name)
     return save_name
 
@@ -89,8 +88,7 @@ def average_pre_progress(video_infos, gt_infos, max_value=None, min_value=None, 
     return feats, labels, video_names
 
 
-def weighted_average_pre_progress(video_infos, gt_infos, max_value=None, min_value=None,
-                                  **kwargs):
+def weighted_average_pre_progress(video_infos, gt_infos, max_value=None, min_value=None, **kwargs):
     feats = []
     labels = []
     video_names = []

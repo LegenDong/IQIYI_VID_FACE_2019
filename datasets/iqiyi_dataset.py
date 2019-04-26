@@ -22,8 +22,7 @@ VAL_GT_NAME = 'val_gt.txt'
 
 
 class IQiYiFaceDataset(data.Dataset):
-    def __init__(self, root, tvt='train', transform=None, target_transform=None,
-                 pre_progress=None, **kwargs):
+    def __init__(self, root, tvt='train', transform=None, target_transform=None, pre_progress=None, **kwargs):
         assert check_exists(root)
         assert tvt in ['train', 'val', 'test']
 
