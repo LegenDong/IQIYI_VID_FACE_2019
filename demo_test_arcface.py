@@ -2,7 +2,7 @@
 # @Time    : 2019/4/22 12:41
 # @Author  : LegenDong
 # @User    : legendong
-# @File    : demo_test.py
+# @File    : demo_test_arcface.py
 # @Software: PyCharm
 import argparse
 import os
@@ -13,7 +13,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from datasets import IQiYiFaceDataset
-from models import TestModel
+from models import ArcFaceModel
 from utils import check_exists, default_get_result, weighted_average_pre_progress
 
 
@@ -23,7 +23,7 @@ def main(data_root, load_path):
     dataset = IQiYiFaceDataset(data_root, 'val', min_value=20., pre_progress=weighted_average_pre_progress, )
     data_loader = DataLoader(dataset, batch_size=20480, shuffle=True, num_workers=4)
 
-    model = TestModel(is_train=False)
+    model = ArcFaceModel(512, 10034 + 1, False)
 
     state_dict = torch.load(load_path)
     model.load_state_dict(state_dict)
@@ -36,7 +36,7 @@ def main(data_root, load_path):
     with torch.no_grad():
         for batch_idx, (feats, _, video_names) in enumerate(data_loader):
             feats = feats.to(device)
-            output = model(feats, _)
+            output = model(feats)
 
             results = default_get_result(output.cpu(), video_names)
             all_results += list(results)
