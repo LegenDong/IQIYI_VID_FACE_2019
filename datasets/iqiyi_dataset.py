@@ -14,9 +14,9 @@ from utils import load_face_from_pickle, load_train_gt_from_txt, check_exists, \
 
 __all__ = ['IQiYiFaceDataset', 'IQiYiHeadDataset', 'IQiYiBodyDataset']
 
-FACE_TRAIN_NAME = 'face_train.pickle'
-FACE_VAL_NAME = 'face_val.pickle'
-FACE_TEST_NAME = 'face_test.pickle'
+FACE_TRAIN_NAME = 'face_train_v2.pickle'
+FACE_VAL_NAME = 'face_val_v2.pickle'
+FACE_TEST_NAME = 'face_test_v2.pickle'
 
 HEAD_TRAIN_NAME = 'head_train.pickle'
 HEAD_VAL_NAME = 'head_val.pickle'
