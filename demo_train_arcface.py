@@ -15,14 +15,14 @@ from torch.utils.data import DataLoader
 
 from datasets import IQiYiFaceDataset
 from models import ArcFaceModel, FocalLoss, ArcMarginProduct
-from utils import check_exists, save_model, weighted_average_pre_progress
+from utils import check_exists, save_model, weighted_average_face_pre_progress
 
 
 def main(args):
     if not check_exists(args.save_dir):
         os.makedirs(args.save_dir)
 
-    dataset = IQiYiFaceDataset(args.root, 'train', pre_progress=weighted_average_pre_progress)
+    dataset = IQiYiFaceDataset(args.root, 'train', pre_progress=weighted_average_face_pre_progress)
     data_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
 
     log_step = len(data_loader) // 10 if len(data_loader) > 10 else 1
