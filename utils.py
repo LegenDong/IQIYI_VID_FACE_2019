@@ -12,11 +12,10 @@ from datetime import datetime
 import numpy as np
 import torch
 
-__all__ = ['check_exists', 'load_train_gt_from_txt', 'load_val_gt_from_txt',
-           'load_face_from_pickle', 'load_head_from_pickle', 'load_body_from_pickle',
-           'load_audio_from_pickle', 'default_pre_progress', 'default_transforms',
-           'default_target_transforms', 'save_model', 'max_score_pre_progress',
-           'default_get_result', 'average_pre_progress', 'weighted_average_pre_progress']
+__all__ = ['check_exists', 'load_train_gt_from_txt', 'load_val_gt_from_txt', 'load_face_from_pickle',
+           'load_head_from_pickle', 'load_body_from_pickle', 'load_audio_from_pickle', 'default_get_result',
+           'default_transforms', 'default_target_transforms', 'save_model', 'default_face_pre_progress',
+           'max_score_face_pre_progress', 'average_face_pre_progress', 'weighted_average_face_pre_progress']
 
 
 def check_exists(file_paths):
@@ -40,7 +39,7 @@ def default_get_result(output, video_names):
     return zip(indexes, values, video_names)
 
 
-def max_score_pre_progress(video_infos, gt_infos, **kwargs):
+def max_score_face_pre_progress(video_infos, gt_infos, **kwargs):
     feats = []
     labels = []
     video_names = []
@@ -55,7 +54,7 @@ def max_score_pre_progress(video_infos, gt_infos, **kwargs):
     return feats, labels, video_names
 
 
-def average_pre_progress(video_infos, gt_infos, max_value=None, min_value=None, **kwargs):
+def average_face_pre_progress(video_infos, gt_infos, max_value=None, min_value=None, **kwargs):
     feats = []
     labels = []
     video_names = []
@@ -88,7 +87,7 @@ def average_pre_progress(video_infos, gt_infos, max_value=None, min_value=None, 
     return feats, labels, video_names
 
 
-def weighted_average_pre_progress(video_infos, gt_infos, max_value=None, min_value=None, **kwargs):
+def weighted_average_face_pre_progress(video_infos, gt_infos, max_value=None, min_value=None, **kwargs):
     feats = []
     labels = []
     video_names = []
@@ -124,7 +123,7 @@ def weighted_average_pre_progress(video_infos, gt_infos, max_value=None, min_val
     return feats, labels, video_names
 
 
-def default_pre_progress(video_infos, gt_infos, max_value=None, min_value=None, **kwargs):
+def default_face_pre_progress(video_infos, gt_infos, max_value=None, min_value=None, **kwargs):
     feats = []
     labels = []
     video_names = []

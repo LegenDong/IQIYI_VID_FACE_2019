@@ -14,13 +14,13 @@ from torch.utils.data import DataLoader
 
 from datasets import IQiYiFaceDataset
 from models import ArcFaceModel
-from utils import check_exists, default_get_result, weighted_average_pre_progress
+from utils import check_exists, default_get_result, weighted_average_face_pre_progress
 
 
 def main(data_root, load_path):
     assert check_exists(load_path)
 
-    dataset = IQiYiFaceDataset(data_root, 'val', min_value=20., pre_progress=weighted_average_pre_progress, )
+    dataset = IQiYiFaceDataset(data_root, 'val', min_value=20., pre_progress=weighted_average_face_pre_progress, )
     data_loader = DataLoader(dataset, batch_size=20480, shuffle=True, num_workers=4)
 
     model = ArcFaceModel(512, 10034 + 1)
