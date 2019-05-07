@@ -2,7 +2,7 @@
 # @Time    : 2019/4/22 12:41
 # @Author  : LegenDong
 # @User    : legendong
-# @File    : demo_test_arcface.py
+# @File    : demo_val_arcface.py
 # @Software: PyCharm
 import argparse
 import logging
@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 def main(data_root, load_path, result_root, log_root):
     result_log_path = os.path.join(log_root, 'result_log.txt')
-    result_path = os.path.join(result_root, 'result.txt')
+    result_path = os.path.join(result_root, 'val_result.txt')
     log_path = os.path.join(log_root, 'log.txt')
 
     if check_exists(result_log_path):
@@ -36,7 +36,7 @@ def main(data_root, load_path, result_root, log_root):
 
     assert check_exists(load_path)
 
-    dataset = IQiYiFaceDataset(data_root, 'test', pre_progress=weighted_average_face_pre_progress, )
+    dataset = IQiYiFaceDataset(data_root, 'val', pre_progress=weighted_average_face_pre_progress, )
     data_loader = DataLoader(dataset, batch_size=2048, shuffle=False, num_workers=4)
 
     model = ArcFaceModel(512, 10034 + 1)
@@ -49,14 +49,14 @@ def main(data_root, load_path, result_root, log_root):
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     model = model.to(device)
 
-    logger.info('test model on {}'.format(device))
+    logger.info('val model on {}'.format(device))
 
     model.eval()
     all_results = []
 
     with torch.no_grad():
         for batch_idx, (feats, _, video_names) in enumerate(data_loader):
-            logger.info('Test Model: {}/{}'.format(batch_idx, len(data_loader)))
+            logger.info('Val Model: {}/{}'.format(batch_idx, len(data_loader)))
 
             feats = feats.to(device)
             output = model(feats)

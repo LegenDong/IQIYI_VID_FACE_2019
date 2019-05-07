@@ -14,8 +14,11 @@ from utils import load_face_from_pickle, load_train_gt_from_txt, check_exists, \
 
 __all__ = ['IQiYiFaceDataset', 'IQiYiHeadDataset', 'IQiYiBodyDataset']
 
+FEAT_PATH = 'feat'
+
 FACE_TRAIN_NAME = 'face_train_v2.pickle'
 FACE_VAL_NAME = 'face_val_v2.pickle'
+FACE_TEST_NAME_OLD = 'face_test.pickle'
 FACE_TEST_NAME = 'face_test_v2.pickle'
 
 HEAD_TRAIN_NAME = 'head_train.pickle'
@@ -50,13 +53,15 @@ class IQiYiFaceDataset(data.Dataset):
             self.target_transform = default_target_transforms
 
         if self.tvt == 'train':
-            self.feats_path = os.path.join(self.root, FACE_TRAIN_NAME)
-            self.gt_path = os.path.join(self.root, TRAIN_GT_NAME)
+            self.feats_path = os.path.join(self.root, FEAT_PATH, FACE_TRAIN_NAME)
+            self.gt_path = os.path.join(self.root, FEAT_PATH, TRAIN_GT_NAME)
         elif self.tvt == 'val':
-            self.feats_path = os.path.join(self.root, FACE_VAL_NAME)
+            self.feats_path = os.path.join(self.root, FEAT_PATH, FACE_VAL_NAME)
             self.gt_path = None
         elif self.tvt == 'test':
-            self.feats_path = os.path.join(self.root, FACE_TEST_NAME)
+            self.feats_path = os.path.join(self.root, FEAT_PATH, FACE_TEST_NAME)
+            if not check_exists(self.feats_path):
+                self.feats_path = os.path.join(self.root, FEAT_PATH, FACE_TEST_NAME_OLD)
             self.gt_path = None
 
         self._init_feat_labels()
@@ -108,13 +113,13 @@ class IQiYiHeadDataset(data.Dataset):
             self.target_transform = default_target_transforms
 
         if self.tvt == 'train':
-            self.feats_path = os.path.join(self.root, HEAD_TRAIN_NAME)
-            self.gt_path = os.path.join(self.root, TRAIN_GT_NAME)
+            self.feats_path = os.path.join(self.root, FEAT_PATH, HEAD_TRAIN_NAME)
+            self.gt_path = os.path.join(self.root, FEAT_PATH, TRAIN_GT_NAME)
         elif self.tvt == 'val':
-            self.feats_path = os.path.join(self.root, HEAD_VAL_NAME)
+            self.feats_path = os.path.join(self.root, FEAT_PATH, HEAD_VAL_NAME)
             self.gt_path = None
         elif self.tvt == 'test':
-            self.feats_path = os.path.join(self.root, HEAD_TEST_NAME)
+            self.feats_path = os.path.join(self.root, FEAT_PATH, HEAD_TEST_NAME)
             self.gt_path = None
 
         self._init_feat_labels()
@@ -166,13 +171,13 @@ class IQiYiBodyDataset(data.Dataset):
             self.target_transform = default_target_transforms
 
         if self.tvt == 'train':
-            self.feats_path = os.path.join(self.root, BODY_TRAIN_NAME)
-            self.gt_path = os.path.join(self.root, TRAIN_GT_NAME)
+            self.feats_path = os.path.join(self.root, FEAT_PATH, BODY_TRAIN_NAME)
+            self.gt_path = os.path.join(self.root, FEAT_PATH, TRAIN_GT_NAME)
         elif self.tvt == 'val':
-            self.feats_path = os.path.join(self.root, BODY_VAL_NAME)
+            self.feats_path = os.path.join(self.root, FEAT_PATH, BODY_VAL_NAME)
             self.gt_path = None
         elif self.tvt == 'test':
-            self.feats_path = os.path.join(self.root, BODY_TEST_NAME)
+            self.feats_path = os.path.join(self.root, FEAT_PATH, BODY_TEST_NAME)
             self.gt_path = None
 
         self._init_feat_labels()

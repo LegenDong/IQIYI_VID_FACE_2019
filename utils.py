@@ -4,32 +4,44 @@
 # @User    : legendong
 # @File    : utils.py
 # @Software: PyCharm
+import logging
 import os
 import pickle
 import random
-from datetime import datetime
 
 import numpy as np
 import torch
 
-__all__ = ['check_exists', 'load_train_gt_from_txt', 'load_val_gt_from_txt', 'load_face_from_pickle',
+__all__ = ['init_logging', 'check_exists', 'load_train_gt_from_txt', 'load_val_gt_from_txt', 'load_face_from_pickle',
            'load_head_from_pickle', 'load_body_from_pickle', 'load_audio_from_pickle', 'default_get_result',
            'default_transforms', 'default_target_transforms', 'save_model', 'default_face_pre_progress',
            'max_score_face_pre_progress', 'average_face_pre_progress', 'weighted_average_face_pre_progress']
+
+LOG_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
+logger = logging.getLogger(__name__)
+
+
+def init_logging(filename, level=logging.DEBUG, log_format=LOG_FORMAT):
+    logging.basicConfig(filename=filename, level=level, format=log_format)
 
 
 def check_exists(file_paths):
     if not isinstance(file_paths, (list, tuple)):
         file_paths = [file_paths]
+
+    logger.info('check_exists: check paths for {}'.format(' '.join(file_paths)))
+
     for file_path in file_paths:
         if not os.path.exists(file_path):
+            logger.info('check_exists: {} not exist'.format(file_path))
             return False
+    logger.info('check_exists: {} all exist'.format(' '.join(file_paths)))
     return True
 
 
 def save_model(model, save_path, name, epoch):
-    save_time = datetime.now().strftime('%m%d_%H%M%S')
-    save_name = os.path.join(save_path, '{}_{:0>4d}_{}.pth'.format(name, epoch, save_time))
+    save_name = os.path.join(save_path, '{}_{:0>4d}.pth'.format(name, epoch))
+    logger.info('save_model: save model {}'.format(' '.join(save_name)))
     torch.save(model.state_dict(), save_name)
     return save_name
 
@@ -47,8 +59,11 @@ def max_score_face_pre_progress(video_infos, gt_infos, **kwargs):
         video_name = video_info['video_name']
         frame_infos = video_info['frame_infos']
         frame_infos.sort(key=lambda k: (k.get('quality_score', .0)), reverse=True)
-        feats.append(frame_infos[0]['feat'])
-        labels.append(gt_infos.get(video_name, -1))
+        feat = frame_infos[0]['feat']
+        label = gt_infos.get(video_name, 0)
+
+        feats.append(feat)
+        labels.append(label)
         video_names.append(video_name)
 
     return feats, labels, video_names
@@ -80,8 +95,11 @@ def average_face_pre_progress(video_infos, gt_infos, max_value=None, min_value=N
         if len(temp_feats) == 0:
             continue
 
-        feats.append(np.mean(np.array(temp_feats), axis=0))
-        labels.append(gt_infos.get(video_name, -1))
+        feat = np.mean(np.array(temp_feats), axis=0)
+        label = gt_infos.get(video_name, 0)
+
+        feats.append(feat)
+        labels.append(label)
         video_names.append(video_name)
 
     return feats, labels, video_names
@@ -116,8 +134,11 @@ def weighted_average_face_pre_progress(video_infos, gt_infos, max_value=None, mi
         if len(temp_feats) == 0:
             continue
 
-        feats.append(np.sum(np.array(temp_feats), axis=0) / sum_score)
-        labels.append(gt_infos.get(video_name, -1))
+        feat = np.sum(np.array(temp_feats), axis=0) / sum_score
+        label = gt_infos.get(video_name, 0)
+
+        feats.append(feat)
+        labels.append(label)
         video_names.append(video_name)
 
     return feats, labels, video_names
@@ -135,15 +156,22 @@ def default_face_pre_progress(video_infos, gt_infos, max_value=None, min_value=N
         for frame_info in frame_infos:
             if (max_value is None or frame_info['quality_score'] < max_value) \
                     and (min_value is None or frame_info['quality_score'] > min_value):
-                feats.append(frame_info['feat'])
-                labels.append(gt_infos.get(video_name, -1))
+                feat = frame_info['feat']
+                label = gt_infos.get(video_name, 0)
+
+                feats.append(feat)
+                labels.append(label)
                 video_names.append(video_name)
                 is_choose = True
 
         if not is_choose:
             frame_info = random.choice(frame_infos)
-            feats.append(frame_info['feat'])
-            labels.append(gt_infos.get(video_name, -1))
+            feat = frame_info['feat']
+            label = gt_infos.get(video_name, 0)
+
+            feats.append(feat)
+            labels.append(label)
+
             video_names.append(video_name)
 
     return feats, labels, video_names
@@ -176,6 +204,7 @@ def load_train_gt_from_txt(file_path):
 def load_val_gt_from_txt(file_path):
     if file_path is None:
         return {}
+
     assert check_exists(file_path)
 
     val_gt_infos = {}

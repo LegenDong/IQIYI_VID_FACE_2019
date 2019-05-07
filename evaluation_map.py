@@ -40,6 +40,6 @@ def calculate_map(gt_path, my_path):
 
 
 if __name__ == '__main__':
-    gt_val_path = '/data/dcq/DataSets/iQIYI/val_gt.txt'
-    my_val_path = './results/result.txt'
+    gt_val_path = '/data/materials/val_gt.txt'
+    my_val_path = '/data/result/val_result.txt'
     print('mAP: {}'.format(calculate_map(gt_val_path, my_val_path)))

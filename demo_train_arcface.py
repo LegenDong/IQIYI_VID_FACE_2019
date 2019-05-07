@@ -22,7 +22,7 @@ def main(args):
     if not check_exists(args.save_dir):
         os.makedirs(args.save_dir)
 
-    dataset = IQiYiFaceDataset(args.root, 'train', pre_progress=weighted_average_face_pre_progress)
+    dataset = IQiYiFaceDataset(args.data_root, 'train', pre_progress=weighted_average_face_pre_progress)
     data_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
 
     log_step = len(data_loader) // 10 if len(data_loader) > 10 else 1
@@ -37,7 +37,7 @@ def main(args):
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     model = model.to(device)
 
-    for epoch_idx in range(200):
+    for epoch_idx in range(args.epoch):
         total_loss = .0
         for batch_idx, (feats, labels, _) in enumerate(data_loader):
 
@@ -72,17 +72,18 @@ def main(args):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='PyTorch Template')
-    parser.add_argument('-r', '--root', default='/data/dcq/DataSets/iQIYI/', type=str,
-                        help='path to load data (default: /data/dcq/DataSets/iQIYI/)')
-    parser.add_argument('-s', '--save_dir', default='/data/dcq/Models/iQIYI/', type=str,
-                        help='path to save model (default: /data/dcq/Models/iQIYI/)')
-    parser.add_argument('-d', '--device', default=None, type=str, help='indices of GPUs to enable (default: all)')
-    parser.add_argument('-n', '--num_classes', default=10035, type=int, help='number of classes (default: 10035)')
-    parser.add_argument('-b', '--batch_size', default=4096, type=int, help='dim of feature (default: 4096)')
-    parser.add_argument('-dim', '--feat_dim', default=512, type=int, help='dim of feature (default: 512)')
-    parser.add_argument('-lr', '--learning_rate', type=float, default=0.1,
-                        help="learning rate for model (default: 0.1)")
+    parser = argparse.ArgumentParser(description='IQIYI VID FACE 2019')
+    parser.add_argument('--data_root', default='/data/materials', type=str,
+                        help='path to load data (default: /data/materials/)')
+    parser.add_argument('--save_dir', default='./checkpoints/', type=str,
+                        help='path to save model (default: ./checkpoints/)')
+    parser.add_argument('--epoch', type=int, default=40, help="the epoch num for train (default: 40)")
+    parser.add_argument('--device', default=None, type=str, help='indices of GPUs to enable (default: all)')
+    parser.add_argument('--num_classes', default=10035, type=int, help='number of classes (default: 10035)')
+    parser.add_argument('--batch_size', default=4096, type=int, help='dim of feature (default: 4096)')
+    parser.add_argument('--feat_dim', default=512, type=int, help='dim of feature (default: 512)')
+    parser.add_argument('--learning_rate', type=float, default=0.1, help="learning rate for model (default: 0.1)")
+
     args = parser.parse_args()
 
     if args.device:
