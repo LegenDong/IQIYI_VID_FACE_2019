@@ -4,4 +4,5 @@
 # @User    : legendong
 # @File    : __init__.py.py
 # @Software: PyCharm
+from .base_data_loader import *
 from .iqiyi_dataset import *

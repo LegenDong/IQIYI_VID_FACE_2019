@@ -44,7 +44,7 @@ def save_model(model, save_path, name, epoch, is_best=False):
     if is_best:
         save_name = os.path.join(save_path, '{}.pth'.format(name))
         logger.info('save_model: save model in {}'.format(' '.join(save_name)))
-        torch.save(model.state_dict(), 'best_model.pth')
+        torch.save(model.state_dict(), save_name)
     else:
         save_name = os.path.join(save_path, '{}_{:0>4d}.pth'.format(name, epoch))
         logger.info('save_model: save model in {}'.format(' '.join(save_name)))

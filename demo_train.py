@@ -13,8 +13,7 @@ import numpy as np
 import torch
 from torch import optim
 
-from datasets import IQiYiFaceDataset
-from datasets.base_data_loader import BaseDataLoader
+from datasets import IQiYiFaceDataset, BaseDataLoader
 from models import FocalLoss, ArcMarginProduct
 from models.models import ArcFaceMaxOutModel
 from utils import check_exists, weighted_average_face_pre_progress, topk_func, save_model
