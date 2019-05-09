@@ -14,8 +14,9 @@ import torch
 
 __all__ = ['init_logging', 'check_exists', 'load_train_gt_from_txt', 'load_val_gt_from_txt', 'load_face_from_pickle',
            'load_head_from_pickle', 'load_body_from_pickle', 'load_audio_from_pickle', 'default_get_result',
-           'default_transforms', 'default_target_transforms', 'save_model', 'default_face_pre_progress',
-           'max_score_face_pre_progress', 'average_face_pre_progress', 'weighted_average_face_pre_progress']
+           'default_transforms', 'default_target_transforms', 'save_model', 'topk_func', 'default_face_pre_progress',
+           'max_score_face_pre_progress', 'average_face_pre_progress', 'weighted_average_face_pre_progress',
+           'retain_noise_in_val']
 
 LOG_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
 logger = logging.getLogger(__name__)
@@ -39,11 +40,26 @@ def check_exists(file_paths):
     return True
 
 
-def save_model(model, save_path, name, epoch):
-    save_name = os.path.join(save_path, '{}_{:0>4d}.pth'.format(name, epoch))
-    logger.info('save_model: save model {}'.format(' '.join(save_name)))
-    torch.save(model.state_dict(), save_name)
+def save_model(model, save_path, name, epoch, is_best=False):
+    if is_best:
+        save_name = os.path.join(save_path, '{}.pth'.format(name))
+        logger.info('save_model: save model in {}'.format(' '.join(save_name)))
+        torch.save(model.state_dict(), 'best_model.pth')
+    else:
+        save_name = os.path.join(save_path, '{}_{:0>4d}.pth'.format(name, epoch))
+        logger.info('save_model: save model in {}'.format(' '.join(save_name)))
+        torch.save(model.state_dict(), save_name)
     return save_name
+
+
+def topk_func(output, target, k=5):
+    with torch.no_grad():
+        pred = torch.topk(output, k, dim=1)[1]
+        assert pred.shape[0] == len(target)
+        correct = 0
+        for i in range(k):
+            correct += torch.sum(pred[:, i] == target).item()
+    return correct / len(target)
 
 
 def default_get_result(output, video_names):
@@ -58,6 +74,10 @@ def max_score_face_pre_progress(video_infos, gt_infos, **kwargs):
     for video_info in video_infos:
         video_name = video_info['video_name']
         frame_infos = video_info['frame_infos']
+
+        if len(frame_infos) == 0:
+            continue
+
         frame_infos.sort(key=lambda k: (k.get('quality_score', .0)), reverse=True)
         feat = frame_infos[0]['feat']
         label = gt_infos.get(video_name, 0)
@@ -76,6 +96,9 @@ def average_face_pre_progress(video_infos, gt_infos, max_value=None, min_value=N
     for video_info in video_infos:
         video_name = video_info['video_name']
         frame_infos = video_info['frame_infos']
+
+        if len(frame_infos) == 0:
+            continue
 
         temp_feats = []
         max_score = -1.0
@@ -112,6 +135,9 @@ def weighted_average_face_pre_progress(video_infos, gt_infos, max_value=None, mi
     for video_info in video_infos:
         video_name = video_info['video_name']
         frame_infos = video_info['frame_infos']
+
+        if len(frame_infos) == 0:
+            continue
 
         temp_feats = []
         sum_score = .0
@@ -152,6 +178,9 @@ def default_face_pre_progress(video_infos, gt_infos, max_value=None, min_value=N
         video_name = video_info['video_name']
         frame_infos = video_info['frame_infos']
 
+        if len(frame_infos) == 0:
+            continue
+
         is_choose = False
         for frame_info in frame_infos:
             if (max_value is None or frame_info['quality_score'] < max_value) \
@@ -173,6 +202,23 @@ def default_face_pre_progress(video_infos, gt_infos, max_value=None, min_value=N
             labels.append(label)
 
             video_names.append(video_name)
+
+    return feats, labels, video_names
+
+
+def retain_noise_in_val(feats, labels, video_names, pr=0.5, **kwargs):
+    assert len(feats) == len(labels)
+    assert len(labels) == len(video_names)
+    assert .0 <= pr <= 1.
+
+    idx_list = []
+    for label_idx, label in enumerate(labels):
+        if 'TRAIN' in video_names[label_idx] or \
+                (label == 0 and 'VAL' in video_names[label_idx] and random.uniform(0, 1) < pr):
+            idx_list.append(label_idx)
+    feats = [feats[idx] for idx in idx_list]
+    labels = [labels[idx] for idx in idx_list]
+    video_names = [video_names[idx] for idx in idx_list]
 
     return feats, labels, video_names
 
@@ -209,7 +255,7 @@ def load_val_gt_from_txt(file_path):
 
     val_gt_infos = {}
     with open(file_path, 'r', encoding='utf-8') as fin:
-        for line in fin:
+        for line in fin.readlines():
             splits = line.strip().split(' ')
             for i in range(1, len(splits)):
                 val_gt_infos[splits[i].replace('.mp4', '')] = int(splits[0])
