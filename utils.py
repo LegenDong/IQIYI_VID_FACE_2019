@@ -14,9 +14,10 @@ import torch
 
 __all__ = ['init_logging', 'check_exists', 'load_train_gt_from_txt', 'load_val_gt_from_txt', 'load_face_from_pickle',
            'load_head_from_pickle', 'load_body_from_pickle', 'load_audio_from_pickle', 'default_get_result',
-           'default_transforms', 'default_target_transforms', 'save_model', 'topk_func', 'default_face_pre_progress',
-           'max_score_face_pre_progress', 'average_face_pre_progress', 'weighted_average_face_pre_progress',
-           'retain_noise_in_val']
+           'default_transforms', 'default_target_transforms', 'save_model', 'topk_func', 'default_pre_progress',
+           'max_score_face_pre_progress', 'average_pre_progress', 'weighted_average_face_pre_progress',
+           'default_retain_noise_in_val', 'default_vid_pre_progress', 'default_vid_retain_noise_in_val',
+           'default_vid_transforms', 'default_vid_target_transforms']
 
 LOG_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
 logger = logging.getLogger(__name__)
@@ -89,46 +90,8 @@ def max_score_face_pre_progress(video_infos, gt_infos, **kwargs):
     return feats, labels, video_names
 
 
-def average_face_pre_progress(video_infos, gt_infos, max_value=None, min_value=None, **kwargs):
-    feats = []
-    labels = []
-    video_names = []
-    for video_info in video_infos:
-        video_name = video_info['video_name']
-        frame_infos = video_info['frame_infos']
-
-        if len(frame_infos) == 0:
-            continue
-
-        temp_feats = []
-        max_score = -1.0
-        max_feat = None
-        for frame_info in frame_infos:
-            if frame_info['quality_score'] > max_score:
-                max_feat = frame_info['feat']
-                max_score = frame_info['quality_score']
-
-            if (max_value is None or frame_info['quality_score'] < max_value) \
-                    and (min_value is None or frame_info['quality_score'] > min_value):
-                temp_feats.append(frame_info['feat'])
-
-        if len(temp_feats) == 0 and max_feat is not None:
-            temp_feats.append(max_feat)
-
-        if len(temp_feats) == 0:
-            continue
-
-        feat = np.mean(np.array(temp_feats), axis=0)
-        label = gt_infos.get(video_name, 0)
-
-        feats.append(feat)
-        labels.append(label)
-        video_names.append(video_name)
-
-    return feats, labels, video_names
-
-
-def weighted_average_face_pre_progress(video_infos, gt_infos, max_value=None, min_value=None, **kwargs):
+def weighted_average_face_pre_progress(video_infos, gt_infos, max_value=None, min_value=None, use_random=True,
+                                       **kwargs):
     feats = []
     labels = []
     video_names = []
@@ -141,24 +104,19 @@ def weighted_average_face_pre_progress(video_infos, gt_infos, max_value=None, mi
 
         temp_feats = []
         sum_score = .0
-        max_score = -1.0
-        max_feat = None
         for frame_info in frame_infos:
-            if frame_info['quality_score'] > max_score:
-                max_feat = frame_info['feat']
-                max_score = frame_info['quality_score']
-
             if (max_value is None or frame_info['quality_score'] < max_value) \
                     and (min_value is None or frame_info['quality_score'] > min_value):
-                temp_feats.append(frame_info['feat'] * frame_info['quality_score'] / 100.)
-                sum_score += frame_info['quality_score'] / 100.
-
-        if len(temp_feats) == 0 and max_feat is not None:
-            temp_feats.append(max_feat * max_score / 100.)
-            sum_score = max_score / 100.
+                temp_feats.append(frame_info['feat'] * frame_info['quality_score'] / 200.)
+                sum_score += frame_info['quality_score'] / 200.
 
         if len(temp_feats) == 0:
-            continue
+            if use_random:
+                frame_info = random.choice(frame_infos)
+                temp_feats.append(frame_info['feat'] * frame_info['quality_score'] / 200.)
+                sum_score += frame_info['quality_score'] / 200.
+            else:
+                continue
 
         feat = np.sum(np.array(temp_feats), axis=0) / sum_score
         label = gt_infos.get(video_name, 0)
@@ -170,7 +128,43 @@ def weighted_average_face_pre_progress(video_infos, gt_infos, max_value=None, mi
     return feats, labels, video_names
 
 
-def default_face_pre_progress(video_infos, gt_infos, max_value=None, min_value=None, **kwargs):
+def average_pre_progress(video_infos, gt_infos, max_value=None, min_value=None, is_face=True, use_random=True,
+                         **kwargs):
+    feats = []
+    labels = []
+    video_names = []
+    for video_info in video_infos:
+        video_name = video_info['video_name']
+        frame_infos = video_info['frame_infos']
+
+        if len(frame_infos) == 0:
+            continue
+
+        temp_feats = []
+        for frame_info in frame_infos:
+            if (not is_face) or (max_value is None or frame_info['quality_score'] < max_value) \
+                    and (min_value is None or frame_info['quality_score'] > min_value):
+                temp_feats.append(frame_info['feat'])
+
+        if len(temp_feats) == 0:
+            if use_random:
+                frame_info = random.choice(frame_infos)
+                temp_feats.append(frame_info['feat'])
+            else:
+                continue
+
+        feat = np.mean(np.array(temp_feats), axis=0)
+        label = gt_infos.get(video_name, 0)
+
+        feats.append(feat)
+        labels.append(label)
+        video_names.append(video_name)
+
+    return feats, labels, video_names
+
+
+def default_pre_progress(video_infos, gt_infos, max_value=None, min_value=None, is_face=True, use_random=True,
+                         **kwargs):
     feats = []
     labels = []
     video_names = []
@@ -183,7 +177,7 @@ def default_face_pre_progress(video_infos, gt_infos, max_value=None, min_value=N
 
         is_choose = False
         for frame_info in frame_infos:
-            if (max_value is None or frame_info['quality_score'] < max_value) \
+            if (not is_face) or (max_value is None or frame_info['quality_score'] < max_value) \
                     and (min_value is None or frame_info['quality_score'] > min_value):
                 feat = frame_info['feat']
                 label = gt_infos.get(video_name, 0)
@@ -193,7 +187,7 @@ def default_face_pre_progress(video_infos, gt_infos, max_value=None, min_value=N
                 video_names.append(video_name)
                 is_choose = True
 
-        if not is_choose:
+        if not is_choose and use_random:
             frame_info = random.choice(frame_infos)
             feat = frame_info['feat']
             label = gt_infos.get(video_name, 0)
@@ -206,7 +200,35 @@ def default_face_pre_progress(video_infos, gt_infos, max_value=None, min_value=N
     return feats, labels, video_names
 
 
-def retain_noise_in_val(feats, labels, video_names, pr=0.5, **kwargs):
+def default_vid_pre_progress(video_infos, gt_infos, **kwargs):
+    vid_infos = {}
+    for key, values in video_infos.items():
+        for value in values:
+            vid_infos.setdefault(value['video_name'], {})[key] = value['frame_infos']
+    to_dels = []
+    for key, value in vid_infos.items():
+        if len(value.keys()) == len(video_infos.keys()):
+            vid_infos[key]['label'] = gt_infos.get(key, 0)
+            vid_infos[key]['video_name'] = key
+        elif len(value.keys()) < len(video_infos.keys()):
+            to_dels.append(key)
+        elif len(value.keys()) > len(video_infos.keys()):
+            logger.error('the vid {} has wrong num of the key {}'.format(key, ' '.join(value.keys())))
+    for to_del in to_dels:
+        del vid_infos[to_del]
+    return list(vid_infos.values())
+
+
+def default_vid_retain_noise_in_val(vid_infos, pr=0.5):
+    idx_list = []
+    for idx, vid_info in enumerate(vid_infos):
+        if ('TRAIN' in vid_info['video_name']) or \
+                (vid_info['label'] == 0 and 'VAL' in vid_info['video_name'] and random.uniform(0, 1) < pr):
+            idx_list.append(idx)
+    return [vid_infos[idx] for idx in idx_list]
+
+
+def default_retain_noise_in_val(feats, labels, video_names, pr=0.5, **kwargs):
     assert len(feats) == len(labels)
     assert len(labels) == len(video_names)
     assert .0 <= pr <= 1.
@@ -223,10 +245,33 @@ def retain_noise_in_val(feats, labels, video_names, pr=0.5, **kwargs):
     return feats, labels, video_names
 
 
+def default_vid_transforms(vid_info, modes, frame_num=5, **kwargs):
+    result = []
+    for mode in modes:
+        frames_infos = vid_info[mode]
+        if len(frames_infos) < frame_num:
+            frames_infos = np.random.choice(frames_infos, frame_num, replace=True)
+        else:
+            frames_infos = np.random.choice(frames_infos, frame_num, replace=False)
+        temp_feats = []
+        for frames_info in frames_infos:
+            temp_feats.append(frames_info['feat'])
+        mean_feat = np.mean(np.array(temp_feats), axis=0)
+        result.append(torch.from_numpy(mean_feat).float())
+    return result
+
+
 def default_transforms(feat, **kwargs):
     feat_np = np.array(feat)
     feat_torch = torch.from_numpy(feat_np).float()
     return feat_torch
+
+
+def default_vid_target_transforms(vid_info, **kwargs):
+    label = vid_info['label']
+    label_np = np.array(label)
+    label_torch = torch.from_numpy(label_np).long()
+    return label_torch
 
 
 def default_target_transforms(label, **kwargs):

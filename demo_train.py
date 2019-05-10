@@ -79,7 +79,6 @@ def main(args):
         os.makedirs(args.save_dir)
 
     dataset = IQiYiFaceDataset(args.data_root, 'train+noise', pre_progress=weighted_average_face_pre_progress, pr=.5)
-    print(len(dataset))
     train_loader = BaseDataLoader(dataset, batch_size=args.batch_size, shuffle=True,
                                   validation_split=0.1, num_workers=4)
     val_loader = train_loader.split_validation()
