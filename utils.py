@@ -17,7 +17,8 @@ __all__ = ['init_logging', 'check_exists', 'load_train_gt_from_txt', 'load_val_g
            'default_transforms', 'default_target_transforms', 'save_model', 'topk_func', 'default_pre_progress',
            'max_score_face_pre_progress', 'average_pre_progress', 'weighted_average_face_pre_progress',
            'default_retain_noise_in_val', 'default_vid_pre_progress', 'default_vid_retain_noise_in_val',
-           'default_vid_transforms', 'default_vid_target_transforms']
+           'default_vid_transforms', 'default_vid_target_transforms', 'default_vid_remove_noise_in_val',
+           'default_remove_noise_in_val']
 
 LOG_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
 logger = logging.getLogger(__name__)
@@ -204,7 +205,9 @@ def default_vid_pre_progress(video_infos, gt_infos, **kwargs):
     vid_infos = {}
     for key, values in video_infos.items():
         for value in values:
-            vid_infos.setdefault(value['video_name'], {})[key] = value['frame_infos']
+            frame_infos = value['frame_infos']
+            if len(frame_infos) > 0:
+                vid_infos.setdefault(value['video_name'], {})[key] = frame_infos
     to_dels = []
     for key, value in vid_infos.items():
         if len(value.keys()) == len(video_infos.keys()):
@@ -219,11 +222,19 @@ def default_vid_pre_progress(video_infos, gt_infos, **kwargs):
     return list(vid_infos.values())
 
 
-def default_vid_retain_noise_in_val(vid_infos, pr=0.5):
+def default_vid_retain_noise_in_val(vid_infos, pr=0.5, **kwargs):
     idx_list = []
     for idx, vid_info in enumerate(vid_infos):
         if ('TRAIN' in vid_info['video_name']) or \
                 (vid_info['label'] == 0 and 'VAL' in vid_info['video_name'] and random.uniform(0, 1) < pr):
+            idx_list.append(idx)
+    return [vid_infos[idx] for idx in idx_list]
+
+
+def default_vid_remove_noise_in_val(vid_infos, **kwargs):
+    idx_list = []
+    for idx, vid_info in enumerate(vid_infos):
+        if ('TRAIN' in vid_info['video_name']) or (vid_info['label'] != 0 and 'VAL' in vid_info['video_name']):
             idx_list.append(idx)
     return [vid_infos[idx] for idx in idx_list]
 
@@ -245,7 +256,22 @@ def default_retain_noise_in_val(feats, labels, video_names, pr=0.5, **kwargs):
     return feats, labels, video_names
 
 
-def default_vid_transforms(vid_info, modes, frame_num=5, **kwargs):
+def default_remove_noise_in_val(feats, labels, video_names, **kwargs):
+    assert len(feats) == len(labels)
+    assert len(labels) == len(video_names)
+
+    idx_list = []
+    for label_idx, label in enumerate(labels):
+        if 'TRAIN' in video_names[label_idx] or (label != 0 and 'VAL' in video_names[label_idx]):
+            idx_list.append(label_idx)
+    feats = [feats[idx] for idx in idx_list]
+    labels = [labels[idx] for idx in idx_list]
+    video_names = [video_names[idx] for idx in idx_list]
+
+    return feats, labels, video_names
+
+
+def default_vid_transforms(vid_info, modes, frame_num=15, **kwargs):
     result = []
     for mode in modes:
         frames_infos = vid_info[mode]
@@ -390,8 +416,8 @@ def load_body_from_pickle(file_path):
         body_feats = body_feats_dict[video_name]
         last_fame_num = 0
         frame_infos = []
-        for ind, head_score in enumerate(body_feats):
-            [frame_str, bbox, feat] = head_score
+        for ind, body_feat in enumerate(body_feats):
+            [frame_str, bbox, feat] = body_feat
             [x1, y1, x2, y2] = bbox
             assert (int(frame_str) >= last_fame_num)
             last_fame_num = int(frame_str)

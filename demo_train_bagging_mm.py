@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# @Time    : 2019/5/9 11:33
+# @Time    : 2019/5/11 15:09
 # @Author  : LegenDong
 # @User    : legendong
-# @File    : demo_train.py
+# @File    : demo_train_bagging_mm.py
 # @Software: PyCharm
 import argparse
 import os
@@ -13,10 +13,9 @@ import numpy as np
 import torch
 from torch import optim
 
-from datasets import IQiYiFaceDataset, BaseDataLoader
-from models import FocalLoss, ArcMarginProduct
-from models.models import ArcFaceMaxOutModel
-from utils import check_exists, weighted_average_face_pre_progress, topk_func, save_model
+from datasets import BaseDataLoader, IQiYiVidDataset
+from models import FocalLoss, ArcMarginProduct, ArcFaceMultiModalModel
+from utils import check_exists, topk_func, save_model
 
 
 def run_train(epoch_idx, model, train_loader, optimizer, metric_func, loss_func, device, log_step):
@@ -25,13 +24,14 @@ def run_train(epoch_idx, model, train_loader, optimizer, metric_func, loss_func,
     total_loss = .0
     start = time.time()
 
-    for batch_idx, (feats, labels, _) in enumerate(train_loader):
-        feats = feats.to(device)
+    for batch_idx, (feats1, feats2, labels, _) in enumerate(train_loader):
+        feats1 = feats1.to(device)
+        feats2 = feats2.to(device)
         labels = labels.to(device)
 
         optimizer.zero_grad()
 
-        outputs = model(feats)
+        outputs = model(feats1, feats2)
         outputs_metric = metric_func(outputs, labels)
         local_loss = loss_func(outputs_metric, labels)
 
@@ -62,9 +62,11 @@ def run_val(model, val_loader, val_func, device):
     total_top1 = .0
     total_top5 = .0
     with torch.no_grad():
-        for batch_idx, (feats, labels, _) in enumerate(val_loader):
-            feats, labels = feats.to(device), labels.to(device)
-            output = model(feats)
+        for batch_idx, (feats1, feats2, labels, _) in enumerate(val_loader):
+            feats1 = feats1.to(device)
+            feats2 = feats2.to(device)
+            labels = labels.to(device)
+            output = model(feats1, feats2)
             total_top1 += val_func(output, labels, 1)
             total_top5 += val_func(output, labels, 5)
 
@@ -78,14 +80,14 @@ def main(args):
     if not check_exists(args.save_dir):
         os.makedirs(args.save_dir)
 
-    dataset = IQiYiFaceDataset(args.data_root, 'train+noise', pre_progress=weighted_average_face_pre_progress, pr=.5)
+    dataset = IQiYiVidDataset(args.data_root, 'train+val-noise', modes='face+head')
     train_loader = BaseDataLoader(dataset, batch_size=args.batch_size, shuffle=True,
                                   validation_split=0.1, num_workers=4)
     val_loader = train_loader.split_validation()
 
     train_log_step = len(train_loader) // 10 if len(train_loader) > 10 else 1
 
-    model = ArcFaceMaxOutModel(args.feat_dim, args.num_classes, 1000)
+    model = ArcFaceMultiModalModel(args.feat_dim, args.num_classes)
     metric_func = ArcMarginProduct()
     loss_func = FocalLoss()
 

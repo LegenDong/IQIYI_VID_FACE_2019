@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# @Time    : 2019/4/20 20:36
+# @Time    : 2019/5/11 18:20
 # @Author  : LegenDong
 # @User    : legendong
-# @File    : demo_train_arcface.py
+# @File    : demo_train_mm.py
 # @Software: PyCharm
 import argparse
 import os
@@ -13,29 +13,21 @@ import torch
 from torch import optim
 from torch.utils.data import DataLoader
 
-from datasets import IQiYiFaceDataset, IQiYiHeadDataset, IQiYiBodyDataset
-from models import ArcFaceModel, FocalLoss, ArcMarginProduct
-from utils import check_exists, save_model, weighted_average_face_pre_progress, average_pre_progress
+from datasets import IQiYiVidDataset
+from models import FocalLoss, ArcMarginProduct, ArcFaceMultiModalModel
+from utils import check_exists, save_model
 
 
 def main(args):
     if not check_exists(args.save_dir):
         os.makedirs(args.save_dir)
 
-    if args.moda == 'face':
-        dataset = IQiYiFaceDataset(args.data_root, 'train+val-noise', pre_progress=weighted_average_face_pre_progress)
-    elif args.moda == 'head':
-        dataset = IQiYiHeadDataset(args.data_root, 'train+val-noise', pre_progress=average_pre_progress)
-    elif args.moda == 'body':
-        dataset = IQiYiBodyDataset(args.data_root, 'train+val-noise', pre_progress=average_pre_progress)
-    else:
-        raise RuntimeError
-
+    dataset = IQiYiVidDataset(args.data_root, 'train+val-noise', modes='face+head')
     data_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
 
     log_step = len(data_loader) // 10 if len(data_loader) > 10 else 1
 
-    model = ArcFaceModel(args.feat_dim, args.num_classes)
+    model = ArcFaceMultiModalModel(args.feat_dim, args.num_classes)
     metric_func = ArcMarginProduct()
     loss_func = FocalLoss()
 
@@ -47,14 +39,15 @@ def main(args):
 
     for epoch_idx in range(args.epoch):
         total_loss = .0
-        for batch_idx, (feats, labels, _) in enumerate(data_loader):
+        for batch_idx, (feats1, feats2, labels, _) in enumerate(data_loader):
 
-            feats = feats.to(device)
+            feats1 = feats1.to(device)
+            feats2 = feats2.to(device)
             labels = labels.to(device)
 
             optimizer.zero_grad()
 
-            outputs = model(feats)
+            outputs = model(feats1, feats2)
             outputs_metric = metric_func(outputs, labels)
             local_loss = loss_func(outputs_metric, labels)
 
@@ -76,15 +69,13 @@ def main(args):
 
         lr_scheduler.step()
 
-    save_model(model, args.save_dir, 'demo_arcface_{}_model'.format(args.moda), 100)
+    save_model(model, args.save_dir, 'demo_arcface_face+head_model', 100)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='IQIYI VID FACE 2019')
     parser.add_argument('--data_root', default='/data/materials', type=str,
                         help='path to load data (default: /data/materials/)')
-    parser.add_argument('--moda', default='face', type=str,
-                        help='the modal[face, head, body] use for train (default: face)')
     parser.add_argument('--save_dir', default='./checkpoints/', type=str,
                         help='path to save model (default: ./checkpoints/)')
     parser.add_argument('--epoch', type=int, default=100, help="the epoch num for train (default: 100)")

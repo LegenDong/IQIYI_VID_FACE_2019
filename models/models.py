@@ -9,7 +9,9 @@ import torch.nn.functional as F
 from torch import nn
 from torch.nn import Parameter
 
-__all__ = ['BaseModel', 'ArcFaceModel', 'ArcFaceMaxOutModel']
+from models.layer.multi_modal_attention_layer import MultiModalAttentionLayer
+
+__all__ = ['BaseModel', 'ArcFaceModel', 'ArcFaceMaxOutModel', 'ArcFaceMultiModalModel']
 
 
 class BaseModel(nn.Module):
@@ -108,7 +110,54 @@ class ArcFaceMaxOutModel(nn.Module):
         return output
 
 
-if __name__ == '__main__':
-    data = torch.randn((128, 512))
-    model = ArcFaceMaxOutModel(512, 1000, 200)
-    print(model(data).size())
+class ArcFaceMultiModalModel(nn.Module):
+    def __init__(self, in_features, out_features):
+        super(ArcFaceMultiModalModel, self).__init__()
+        self.in_features = in_features
+        self.out_features = out_features
+
+        self.fc1 = nn.Sequential(nn.Linear(self.in_features, self.in_features * 2),
+                                 nn.BatchNorm1d(self.in_features * 2),
+                                 nn.PReLU(),
+                                 nn.Dropout(),
+                                 nn.Linear(self.in_features * 2, self.in_features),
+                                 nn.BatchNorm1d(self.in_features),
+                                 nn.PReLU(), )
+
+        nn.init.kaiming_normal_(self.fc1[0].weight)
+        nn.init.constant_(self.fc1[0].bias, .0)
+        nn.init.kaiming_normal_(self.fc1[4].weight)
+        nn.init.constant_(self.fc1[4].bias, .0)
+
+        self.fc2 = nn.Sequential(nn.Linear(self.in_features, self.in_features * 2),
+                                 nn.BatchNorm1d(self.in_features * 2),
+                                 nn.PReLU(),
+                                 nn.Dropout(),
+                                 nn.Linear(self.in_features * 2, self.in_features),
+                                 nn.BatchNorm1d(self.in_features),
+                                 nn.PReLU(), )
+
+        nn.init.kaiming_normal_(self.fc2[0].weight)
+        nn.init.constant_(self.fc2[0].bias, .0)
+        nn.init.kaiming_normal_(self.fc2[4].weight)
+        nn.init.constant_(self.fc2[4].bias, .0)
+
+        self.multi_modal_attention_layer = MultiModalAttentionLayer(2, 4)
+
+        self.weight = Parameter(torch.FloatTensor(self.out_features, self.in_features * 2))
+        nn.init.xavier_uniform_(self.weight)
+
+    def forward(self, x1, x2, ):
+        output1 = self.fc1(x1)
+        output1 = x1 + output1
+
+        output2 = self.fc1(x2)
+        output2 = x2 + output2
+
+        output = torch.cat([output1.view(-1, 1, self.in_features),
+                            output2.view(-1, 1, self.in_features)], dim=1)
+        output = self.multi_modal_attention_layer(output).view(-1, self.in_features * 2)
+
+        output = F.linear(F.normalize(output), F.normalize(self.weight))
+
+        return output

@@ -10,11 +10,12 @@ from torch.utils import data
 
 import utils as module
 from utils import load_face_from_pickle, load_train_gt_from_txt, check_exists, \
-    default_pre_progress, default_transforms, default_target_transforms, load_head_from_pickle, \
-    load_body_from_pickle, load_val_gt_from_txt, default_retain_noise_in_val, default_vid_retain_noise_in_val, \
-    default_vid_pre_progress, default_vid_transforms, default_vid_target_transforms
+    default_pre_progress, default_transforms, default_target_transforms, load_val_gt_from_txt, \
+    default_retain_noise_in_val, default_vid_retain_noise_in_val, \
+    default_vid_pre_progress, default_vid_transforms, default_vid_target_transforms, default_vid_remove_noise_in_val, \
+    default_remove_noise_in_val, load_head_from_pickle, load_body_from_pickle
 
-__all__ = ['IQiYiFaceDataset', 'IQiYiHeadDataset', 'IQiYiBodyDataset']
+__all__ = ['IQiYiVidDataset', 'IQiYiFaceDataset', 'IQiYiHeadDataset', 'IQiYiBodyDataset']
 
 FEAT_PATH = 'feat'
 
@@ -70,7 +71,7 @@ class IQiYiVidDataset(data.Dataset):
         modes = modes.split('+')
 
         assert check_exists(root)
-        assert tvt in ['train', 'val', 'train+val', 'train+noise', 'test', ]
+        assert tvt in ['train', 'val', 'train+val', 'train+noise', 'train+val-noise', 'test', ]
         assert 0 < len(modes) < 4
         for sub in modes:
             assert sub in ['face', 'head', 'body']
@@ -106,7 +107,7 @@ class IQiYiVidDataset(data.Dataset):
             for mode in modes:
                 self.feats_paths[mode] = os.path.join(self.root, FEAT_PATH, gen_file_name(mode, 'val'))
             self.gt_path = os.path.join(self.root, VAL_GT_NAME)
-        elif self.tvt == 'train+val' or self.tvt == 'train+noise':
+        elif self.tvt == 'train+val' or self.tvt == 'train+noise' or self.tvt == 'train+val-noise':
             self.train_feats_paths = {}
             self.val_feats_paths = {}
             for mode in modes:
@@ -137,7 +138,7 @@ class IQiYiVidDataset(data.Dataset):
                 load_func = getattr(module, TEMPLATE_LOAD_PICKLE.format(key))
                 video_infos[key] = load_func(value)
             gt_labels = load_val_gt_from_txt(self.gt_path)
-        elif self.tvt == 'train+val' or self.tvt == 'train+noise':
+        elif self.tvt == 'train+val' or self.tvt == 'train+noise' or self.tvt == 'train+val-noise':
             video_infos = {}
             for key, value in self.train_feats_paths.items():
                 assert hasattr(module, TEMPLATE_LOAD_PICKLE.format(key))
@@ -160,6 +161,9 @@ class IQiYiVidDataset(data.Dataset):
         self.vid_infos = self.pre_progress(video_infos, gt_labels, **self.kwargs)
         if self.tvt == 'train+noise':
             self.vid_infos = default_vid_retain_noise_in_val(self.vid_infos, **self.kwargs)
+        elif self.tvt == 'train+val-noise':
+            self.vid_infos = default_vid_remove_noise_in_val(self.vid_infos, **self.kwargs)
+
         self.length = len(self.vid_infos)
 
     def __getitem__(self, index):
@@ -185,7 +189,7 @@ class IQiYiVidDataset(data.Dataset):
 class IQiYiFaceDataset(data.Dataset):
     def __init__(self, root, tvt='train', transform=None, target_transform=None, pre_progress=None, **kwargs):
         assert check_exists(root)
-        assert tvt in ['train', 'val', 'train+val', 'train+noise', 'test', ]
+        assert tvt in ['train', 'val', 'train+val', 'train+noise', 'train+val-noise', 'test', ]
 
         self.root = os.path.expanduser(root)
         self.tvt = tvt
@@ -207,7 +211,7 @@ class IQiYiFaceDataset(data.Dataset):
         elif self.tvt == 'val':
             self.feats_path = os.path.join(self.root, FEAT_PATH, FACE_VAL_NAME)
             self.gt_path = os.path.join(self.root, VAL_GT_NAME)
-        elif self.tvt == 'train+val' or self.tvt == 'train+noise':
+        elif self.tvt == 'train+val' or self.tvt == 'train+noise' or self.tvt == 'train+val-noise':
             self.train_feats_path = os.path.join(self.root, FEAT_PATH, FACE_TRAIN_NAME)
             self.val_feats_path = os.path.join(self.root, FEAT_PATH, FACE_VAL_NAME)
             self.train_gt_path = os.path.join(self.root, TRAIN_GT_NAME)
@@ -225,7 +229,7 @@ class IQiYiFaceDataset(data.Dataset):
         elif self.tvt == 'val':
             video_infos = load_face_from_pickle(self.feats_path)
             gt_labels = load_val_gt_from_txt(self.gt_path)
-        elif self.tvt == 'train+val' or self.tvt == 'train+noise':
+        elif self.tvt == 'train+val' or self.tvt == 'train+noise' or self.tvt == 'train+val-noise':
             video_infos = []
             video_infos += load_face_from_pickle(self.train_feats_path)
             video_infos += load_face_from_pickle(self.val_feats_path)
@@ -242,6 +246,9 @@ class IQiYiFaceDataset(data.Dataset):
         if self.tvt == 'train+noise':
             self.feats, self.labels, self.video_names \
                 = default_retain_noise_in_val(self.feats, self.labels, self.video_names, **self.kwargs)
+        elif self.tvt == 'train+val-noise':
+            self.feats, self.labels, self.video_names \
+                = default_remove_noise_in_val(self.feats, self.labels, self.video_names, **self.kwargs)
         self.length = len(self.feats)
 
         assert len(self.feats) == len(self.labels)
@@ -264,7 +271,7 @@ class IQiYiFaceDataset(data.Dataset):
 class IQiYiHeadDataset(data.Dataset):
     def __init__(self, root, tvt='train', transform=None, target_transform=None, pre_progress=None, **kwargs):
         assert check_exists(root)
-        assert tvt in ['train', 'val', 'test']
+        assert tvt in ['train', 'val', 'train+val', 'train+noise', 'train+val-noise', 'test', ]
 
         self.root = os.path.expanduser(root)
         self.tvt = tvt
@@ -275,19 +282,24 @@ class IQiYiHeadDataset(data.Dataset):
 
         if self.pre_progress is None:
             self.pre_progress = default_pre_progress
+        else:
+            assert not ('face' in pre_progress.__name__.lower())
         if self.transform is None:
             self.transform = default_transforms
         if self.target_transform is None:
             self.target_transform = default_target_transforms
-        else:
-            assert not ('face' in pre_progress.__name__.lower())
 
         if self.tvt == 'train':
             self.feats_path = os.path.join(self.root, FEAT_PATH, HEAD_TRAIN_NAME)
             self.gt_path = os.path.join(self.root, FEAT_PATH, TRAIN_GT_NAME)
         elif self.tvt == 'val':
             self.feats_path = os.path.join(self.root, FEAT_PATH, HEAD_VAL_NAME)
-            self.gt_path = None
+            self.gt_path = os.path.join(self.root, FEAT_PATH, VAL_GT_NAME)
+        elif self.tvt == 'train+val' or self.tvt == 'train+noise' or self.tvt == 'train+val-noise':
+            self.train_feats_path = os.path.join(self.root, FEAT_PATH, HEAD_TRAIN_NAME)
+            self.val_feats_path = os.path.join(self.root, FEAT_PATH, HEAD_VAL_NAME)
+            self.train_gt_path = os.path.join(self.root, TRAIN_GT_NAME)
+            self.val_gt_path = os.path.join(self.root, VAL_GT_NAME)
         elif self.tvt == 'test':
             self.feats_path = os.path.join(self.root, FEAT_PATH, HEAD_TEST_NAME)
             self.gt_path = None
@@ -295,13 +307,32 @@ class IQiYiHeadDataset(data.Dataset):
         self._init_feat_labels()
 
     def _init_feat_labels(self):
-        video_infos = load_head_from_pickle(self.feats_path)
         if self.tvt == 'train':
+            video_infos = load_head_from_pickle(self.feats_path)
             gt_labels = load_train_gt_from_txt(self.gt_path)
-        else:
+        elif self.tvt == 'val':
+            video_infos = load_head_from_pickle(self.feats_path)
+            gt_labels = load_val_gt_from_txt(self.gt_path)
+        elif self.tvt == 'train+val' or self.tvt == 'train+noise' or self.tvt == 'train+val-noise':
+            video_infos = []
+            video_infos += load_head_from_pickle(self.train_feats_path)
+            video_infos += load_head_from_pickle(self.val_feats_path)
+
             gt_labels = {}
+            gt_labels.update(load_train_gt_from_txt(self.train_gt_path))
+            gt_labels.update(load_val_gt_from_txt(self.val_gt_path))
+        else:
+            video_infos = load_head_from_pickle(self.feats_path)
+            gt_labels = {}
+
         self.feats, self.labels, self.video_names \
             = self.pre_progress(video_infos, gt_labels, is_face=False, **self.kwargs)
+        if self.tvt == 'train+noise':
+            self.feats, self.labels, self.video_names \
+                = default_retain_noise_in_val(self.feats, self.labels, self.video_names, **self.kwargs)
+        elif self.tvt == 'train+val-noise':
+            self.feats, self.labels, self.video_names \
+                = default_remove_noise_in_val(self.feats, self.labels, self.video_names, **self.kwargs)
         self.length = len(self.feats)
 
         assert len(self.feats) == len(self.labels)
@@ -324,7 +355,7 @@ class IQiYiHeadDataset(data.Dataset):
 class IQiYiBodyDataset(data.Dataset):
     def __init__(self, root, tvt='train', transform=None, target_transform=None, pre_progress=None, **kwargs):
         assert check_exists(root)
-        assert tvt in ['train', 'val', 'test']
+        assert tvt in ['train', 'val', 'train+val', 'train+noise', 'train+val-noise', 'test', ]
 
         self.root = os.path.expanduser(root)
         self.tvt = tvt
@@ -335,19 +366,24 @@ class IQiYiBodyDataset(data.Dataset):
 
         if self.pre_progress is None:
             self.pre_progress = default_pre_progress
+        else:
+            assert not ('face' in pre_progress.__name__.lower())
         if self.transform is None:
             self.transform = default_transforms
         if self.target_transform is None:
             self.target_transform = default_target_transforms
-        else:
-            assert not ('face' in pre_progress.__name__.lower())
 
         if self.tvt == 'train':
             self.feats_path = os.path.join(self.root, FEAT_PATH, BODY_TRAIN_NAME)
             self.gt_path = os.path.join(self.root, FEAT_PATH, TRAIN_GT_NAME)
         elif self.tvt == 'val':
             self.feats_path = os.path.join(self.root, FEAT_PATH, BODY_VAL_NAME)
-            self.gt_path = None
+            self.gt_path = os.path.join(self.root, FEAT_PATH, VAL_GT_NAME)
+        elif self.tvt == 'train+val' or self.tvt == 'train+noise' or self.tvt == 'train+val-noise':
+            self.train_feats_path = os.path.join(self.root, FEAT_PATH, BODY_TRAIN_NAME)
+            self.val_feats_path = os.path.join(self.root, FEAT_PATH, BODY_VAL_NAME)
+            self.train_gt_path = os.path.join(self.root, TRAIN_GT_NAME)
+            self.val_gt_path = os.path.join(self.root, VAL_GT_NAME)
         elif self.tvt == 'test':
             self.feats_path = os.path.join(self.root, FEAT_PATH, BODY_TEST_NAME)
             self.gt_path = None
@@ -355,13 +391,32 @@ class IQiYiBodyDataset(data.Dataset):
         self._init_feat_labels()
 
     def _init_feat_labels(self):
-        video_infos = load_body_from_pickle(self.feats_path)
         if self.tvt == 'train':
+            video_infos = load_body_from_pickle(self.feats_path)
             gt_labels = load_train_gt_from_txt(self.gt_path)
-        else:
+        elif self.tvt == 'val':
+            video_infos = load_body_from_pickle(self.feats_path)
+            gt_labels = load_val_gt_from_txt(self.gt_path)
+        elif self.tvt == 'train+val' or self.tvt == 'train+noise' or self.tvt == 'train+val-noise':
+            video_infos = []
+            video_infos += load_body_from_pickle(self.train_feats_path)
+            video_infos += load_body_from_pickle(self.val_feats_path)
+
             gt_labels = {}
+            gt_labels.update(load_train_gt_from_txt(self.train_gt_path))
+            gt_labels.update(load_val_gt_from_txt(self.val_gt_path))
+        else:
+            video_infos = load_body_from_pickle(self.feats_path)
+            gt_labels = {}
+
         self.feats, self.labels, self.video_names \
             = self.pre_progress(video_infos, gt_labels, is_face=False, **self.kwargs)
+        if self.tvt == 'train+noise':
+            self.feats, self.labels, self.video_names \
+                = default_retain_noise_in_val(self.feats, self.labels, self.video_names, **self.kwargs)
+        elif self.tvt == 'train+val-noise':
+            self.feats, self.labels, self.video_names \
+                = default_remove_noise_in_val(self.feats, self.labels, self.video_names, **self.kwargs)
         self.length = len(self.feats)
 
         assert len(self.feats) == len(self.labels)

@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# @Time    : 2019/4/22 12:41
+# @Time    : 2019/5/11 19:30
 # @Author  : LegenDong
 # @User    : legendong
-# @File    : demo_test_arcface.py
+# @File    : demo_test_mm.py
 # @Software: PyCharm
 import argparse
 import logging
@@ -13,30 +13,21 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
-from datasets import IQiYiFaceDataset, IQiYiHeadDataset, IQiYiBodyDataset
-from models import ArcFaceModel
-from utils import check_exists, default_get_result, weighted_average_face_pre_progress, init_logging, \
-    average_pre_progress
+from datasets import IQiYiVidDataset
+from models import ArcFaceMultiModalModel
+from utils import check_exists, default_get_result, init_logging
 
 logger = logging.getLogger(__name__)
 
 
-def main(data_root, moda):
-    load_path = './checkpoints/demo_arcface_{}_model_0100.pth'.format(moda)
+def main(data_root):
+    load_path = './checkpoints/demo_arcface_face+head_model_0100.pth'
     assert check_exists(load_path)
 
-    if moda == 'face':
-        dataset = IQiYiFaceDataset(data_root, 'test', pre_progress=weighted_average_face_pre_progress)
-    elif moda == 'head':
-        dataset = IQiYiHeadDataset(data_root, 'test', pre_progress=average_pre_progress)
-    elif moda == 'body':
-        dataset = IQiYiBodyDataset(data_root, 'test', pre_progress=average_pre_progress)
-    else:
-        raise RuntimeError
-
+    dataset = IQiYiVidDataset(data_root, 'test', modes='face+head')
     data_loader = DataLoader(dataset, batch_size=2048, shuffle=False, num_workers=1)
 
-    model = ArcFaceModel(512, 10034 + 1)
+    model = ArcFaceMultiModalModel(512, 10034 + 1)
     metric_func = torch.nn.Softmax(-1)
 
     logger.info('load model from {}'.format(load_path))
@@ -52,11 +43,12 @@ def main(data_root, moda):
     all_results = []
 
     with torch.no_grad():
-        for batch_idx, (feats, _, video_names) in enumerate(data_loader):
+        for batch_idx, (feats1, feats2, _, video_names) in enumerate(data_loader):
             logger.info('Test Model: {}/{}'.format(batch_idx, len(data_loader)))
 
-            feats = feats.to(device)
-            output = model(feats)
+            feats1 = feats1.to(device)
+            feats2 = feats2.to(device)
+            output = model(feats1, feats2)
             output = metric_func(output)
 
             results = default_get_result(output.cpu(), video_names)
@@ -68,8 +60,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='PyTorch Template')
     parser.add_argument('--data_root', default='/data/materials/', type=str,
                         help='path to load data (default: /data/materials/)')
-    parser.add_argument('--moda', default='face', type=str,
-                        help='the modal[face, head, body] use for train (default: face)')
     parser.add_argument('--device', default=None, type=str, help='indices of GPUs to enable (default: all)')
     parser.add_argument('--log_root', default='/data/logs/', type=str,
                         help='path to save log (default: /data/logs/)')
@@ -103,7 +93,7 @@ if __name__ == '__main__':
 
     init_logging(log_path)
 
-    all_results = main(args.data_root, args.moda, )
+    all_results = main(args.data_root, )
 
     results_dict = {}
     for result in all_results:
