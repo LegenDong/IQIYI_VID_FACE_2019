@@ -9,9 +9,9 @@ import torch.nn.functional as F
 from torch import nn
 from torch.nn import Parameter
 
-from models.layer.multi_modal_attention_layer import MultiModalAttentionLayer
+from models.layer import MultiModalAttentionLayer, NanAttentionLayer
 
-__all__ = ['BaseModel', 'ArcFaceModel', 'ArcFaceMaxOutModel', 'ArcFaceMultiModalModel']
+__all__ = ['BaseModel', 'ArcFaceModel', 'ArcFaceMaxOutModel', 'ArcFaceMultiModalModel', 'NanModel']
 
 
 class BaseModel(nn.Module):
@@ -161,3 +161,45 @@ class ArcFaceMultiModalModel(nn.Module):
         output = F.linear(F.normalize(output), F.normalize(self.weight))
 
         return output
+
+
+class NanModel(nn.Module):
+    def __init__(self, in_features, out_features, num_attn=1, use_gpu=True):
+        super(NanModel, self).__init__()
+        self.in_features = in_features
+        self.out_features = out_features
+        self.num_attn = num_attn
+        self.use_gpu = use_gpu
+
+        self.nan = NanAttentionLayer(self.in_features, self.num_attn, use_gpu=self.use_gpu)
+
+        self.fc = nn.Sequential(nn.Linear(self.in_features, self.in_features * 2),
+                                nn.BatchNorm1d(self.in_features * 2),
+                                nn.PReLU(),
+                                nn.Dropout(),
+                                nn.Linear(self.in_features * 2, self.in_features),
+                                nn.BatchNorm1d(self.in_features),
+                                nn.PReLU(), )
+
+        nn.init.kaiming_normal_(self.fc[0].weight)
+        nn.init.constant_(self.fc[0].bias, .0)
+        nn.init.kaiming_normal_(self.fc[4].weight)
+        nn.init.constant_(self.fc[4].bias, .0)
+
+        self.weight = Parameter(torch.FloatTensor(self.out_features, self.in_features))
+        nn.init.xavier_uniform_(self.weight)
+
+    def forward(self, feats):
+        x = self.nan(feats)
+
+        output = self.fc(x)
+        output = x + output
+        output = F.linear(F.normalize(output), F.normalize(self.weight))
+
+        return output
+
+
+if __name__ == '__main__':
+    data = torch.randn((4, 512, 30))
+    model = NanModel(512, 1000, num_attn=3, use_gpu=False)
+    print(model(data).size())
