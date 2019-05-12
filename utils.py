@@ -18,7 +18,7 @@ __all__ = ['init_logging', 'check_exists', 'load_train_gt_from_txt', 'load_val_g
            'max_score_face_pre_progress', 'average_pre_progress', 'weighted_average_face_pre_progress',
            'default_retain_noise_in_val', 'default_vid_pre_progress', 'default_vid_retain_noise_in_val',
            'default_vid_transforms', 'default_vid_target_transforms', 'default_vid_remove_noise_in_val',
-           'default_remove_noise_in_val']
+           'default_remove_noise_in_val', 'makedir','load_infos']
 
 LOG_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
 logger = logging.getLogger(__name__)
@@ -454,3 +454,42 @@ def load_audio_from_pickle(file_path):
             'feat': audio_feat})
 
     return video_infos
+
+
+def makedir(path):
+    if not os.path.join(path):
+        os.makedirs(path)
+
+
+def load_infos(video_infos, gt_infos, embedding_size, **kwargs):
+    feats = []
+    qs = []
+    ds = []
+    bboxs = []
+    labels = []
+    video_names = []
+
+    for video_info in video_infos:
+        video_name = video_info['video_name']
+        frame_infos = video_info['frame_infos']
+
+        if len(frame_infos) > 0:
+            if embedding_size <= len(frame_infos):
+                index = np.random.choice(range(len(frame_infos)), embedding_size, replace=False)
+            else:
+                index = np.random.choice(range(len(frame_infos)), embedding_size, replace=True)
+
+            feat = [frame_infos[i]['feat'] for i in index]
+            q = [frame_infos[i]['quality_score'] for i in index]
+            d = [frame_infos[i]['det_score'] for i in index]
+            bbox = [frame_infos[i]['bbox'] for i in index]
+            label = gt_infos.get(video_name, 0)
+
+            feats.append(feat)
+            qs.append(q)
+            ds.append(d)
+            bboxs.append(bbox)
+            labels.append(label)
+            video_names.append(video_name)
+
+    return feats, qs, ds, bboxs, labels, video_names
