@@ -459,6 +459,9 @@ class IQiYiSepDataset(data.Dataset):
         elif self.tvt == 'val':
             self.feats_path = os.path.join(self.root, FEAT_PATH, FACE_VAL_NAME)
             self.gt_path = None
+        elif self.tvt == 'test':
+            self.feats_path = os.path.join(self.root, FEAT_PATH, FACE_TEST_NAME)
+            self.gt_path = None
 
         self._init_feat_labels()
 
