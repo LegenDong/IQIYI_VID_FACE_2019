@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# @Time    : 2019/5/9 11:33
+# @Time    : 2019/5/13 18:40
 # @Author  : LegenDong
 # @User    : legendong
-# @File    : demo_train_bagging.py
+# @File    : demo_train_bagging_nan.py
 # @Software: PyCharm
 import argparse
 import os
@@ -13,10 +13,9 @@ import numpy as np
 import torch
 from torch import optim
 
-from datasets import IQiYiFaceDataset, BaseDataLoader, IQiYiHeadDataset, IQiYiBodyDataset
-from models import FocalLoss, ArcMarginProduct
-from models.models import ArcFaceMaxOutModel
-from utils import check_exists, weighted_average_face_pre_progress, topk_func, save_model, average_pre_progress
+from datasets import BaseDataLoader, IQiYiVidDataset
+from models import FocalLoss, ArcMarginProduct, ArcFaceNanModel
+from utils import check_exists, topk_func, save_model, sep_vid_transforms
 
 
 def run_train(epoch_idx, model, train_loader, optimizer, metric_func, loss_func, device, log_step):
@@ -63,7 +62,8 @@ def run_val(model, val_loader, val_func, device):
     total_top5 = .0
     with torch.no_grad():
         for batch_idx, (feats, labels, _) in enumerate(val_loader):
-            feats, labels = feats.to(device), labels.to(device)
+            feats = feats.to(device)
+            labels = labels.to(device)
             output = model(feats)
             total_top1 += val_func(output, labels, 1)
             total_top5 += val_func(output, labels, 5)
@@ -78,22 +78,15 @@ def main(args):
     if not check_exists(args.save_dir):
         os.makedirs(args.save_dir)
 
-    if args.moda == 'face':
-        dataset = IQiYiFaceDataset(args.data_root, 'train+val-noise', pre_progress=weighted_average_face_pre_progress)
-    elif args.moda == 'head':
-        dataset = IQiYiHeadDataset(args.data_root, 'train+val-noise', pre_progress=average_pre_progress)
-    elif args.moda == 'body':
-        dataset = IQiYiBodyDataset(args.data_root, 'train+val-noise', pre_progress=average_pre_progress)
-    else:
-        raise RuntimeError
-
-    train_loader = BaseDataLoader(dataset, batch_size=args.batch_size, shuffle=True, validation_split=0.1,
-                                  num_workers=4)
+    dataset = IQiYiVidDataset(args.data_root, 'train+val-noise', 'face', transform=sep_vid_transforms,
+                              num_frame=args.num_frame)
+    train_loader = BaseDataLoader(dataset, batch_size=args.batch_size, shuffle=True,
+                                  validation_split=0.1, num_workers=4)
     val_loader = train_loader.split_validation()
 
     train_log_step = len(train_loader) // 10 if len(train_loader) > 10 else 1
 
-    model = ArcFaceMaxOutModel(args.feat_dim, args.num_classes, 1000)
+    model = ArcFaceNanModel(args.feat_dim, args.num_classes, num_attn=args.num_attn)
     metric_func = ArcMarginProduct()
     loss_func = FocalLoss()
 
@@ -115,12 +108,12 @@ def main(args):
         for key, value in sorted(test_log.items(), key=lambda item: item[0]):
             print('    {:20s}: {:6f}'.format(str(key), value))
 
-        # if epoch_idx % args.save_interval == 0 and epoch_idx != 0:
-        #     save_model(model, args.save_dir, 'test_{}_model'.format(args.moda), epoch_idx, is_best=False)
+        if epoch_idx % args.save_interval == 0 and epoch_idx != 0:
+            save_model(model, args.save_dir, 'test_model', epoch_idx, is_best=False)
 
         test_acc = test_log['top1 acc']
         if max_test_acc < test_acc:
-            save_model(model, args.save_dir, 'best_{}_model'.format(args.moda), epoch_idx, is_best=True)
+            save_model(model, args.save_dir, 'best_model', epoch_idx, is_best=True)
             max_test_acc = test_acc
 
         local_logs = train_log.copy()
@@ -140,15 +133,15 @@ if __name__ == '__main__':
                         help='path to load data (default: /data/materials/)')
     parser.add_argument('--save_dir', default='./checkpoints/bagging/', type=str,
                         help='path to save model (default: ./checkpoints/bagging/)')
-    parser.add_argument('--moda', default='face', type=str,
-                        help='the modal[face, head, body] use for train (default: face)')
-    parser.add_argument('--epoch', type=int, default=100, help="the epoch num for train (default: 100)")
+    parser.add_argument('--epoch', type=int, default=200, help="the epoch num for train (default: 200)")
     parser.add_argument('--device', default=None, type=str, help='indices of GPUs to enable (default: all)')
     parser.add_argument('--num_classes', default=10035, type=int, help='number of classes (default: 10035)')
     parser.add_argument('--batch_size', default=4096, type=int, help='dim of feature (default: 4096)')
     parser.add_argument('--feat_dim', default=512, type=int, help='dim of feature (default: 512)')
     parser.add_argument('--save_interval', default=10, type=int, help='interval of epochs for save model (default: 10)')
     parser.add_argument('--learning_rate', type=float, default=0.1, help="learning rate for model (default: 0.1)")
+    parser.add_argument('--num_frame', default=30, type=int, help='size of video length (default: 30)')
+    parser.add_argument('--num_attn', default=1, type=int, help='number of attention block in NAN')
 
     args = parser.parse_args()
 

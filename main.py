@@ -13,6 +13,7 @@ import numpy as np
 import torch
 
 import demo_test_arcface
+import demo_test_mm
 from utils import check_exists, init_logging
 
 logger = logging.getLogger(__name__)
@@ -33,9 +34,11 @@ logger = logging.getLogger(__name__)
 #             vid_names.append(result[2])
 #         for result in results_2:
 #             if result[2] not in vid_names:
+#                 vid_names.append(result[2])
 #                 results_1.append(result)
 #         for result in results_3:
 #             if result[2] not in vid_names:
+#                 vid_names.append(result[2])
 #                 results_1.append(result)
 #
 #         return results_1
@@ -50,32 +53,43 @@ logger = logging.getLogger(__name__)
 #             vid_names.append(result[2])
 #         for result in results_2:
 #             if result[2] not in vid_names:
+#                 vid_names.append(result[2])
 #                 results_1.append(result)
 #         for result in results_3:
 #             if result[2] not in vid_names:
+#                 vid_names.append(result[2])
 #                 results_1.append(result)
 #         for result in results_4:
 #             if result[2] not in vid_names:
+#                 vid_names.append(result[2])
 #                 results_1.append(result)
 #
 #         return results_1
 
 
 def main(data_root):
-    results_1 = demo_test_arcface.main(data_root, 'face')
-    results_2 = demo_test_arcface.main(data_root, 'head')
-    results_3 = demo_test_arcface.main(data_root, 'body')
+    results_1 = demo_test_mm.main(data_root)
+    results_2 = demo_test_arcface.main(data_root, 'face')
+    results_3 = demo_test_arcface.main(data_root, 'head')
+    results_4 = demo_test_arcface.main(data_root, 'body')
 
     vid_names = []
     for result in results_1:
         vid_names.append(result[2])
     for result in results_2:
         if result[2] not in vid_names:
-            logger.info('video {} from head model'.format(result[2]))
+            logger.info('vid {} use the result from face'.format(result[2]))
+            vid_names.append(result[2])
             results_1.append(result)
     for result in results_3:
         if result[2] not in vid_names:
-            logger.info('video {} from body model'.format(result[2]))
+            logger.info('vid {} use the result from head'.format(result[2]))
+            vid_names.append(result[2])
+            results_1.append(result)
+    for result in results_4:
+        if result[2] not in vid_names:
+            logger.info('vid {} use the result from body'.format(result[2]))
+            vid_names.append(result[2])
             results_1.append(result)
 
     return results_1

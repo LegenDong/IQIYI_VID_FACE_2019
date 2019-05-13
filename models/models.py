@@ -11,7 +11,7 @@ from torch.nn import Parameter
 
 from models.layer import MultiModalAttentionLayer, NanAttentionLayer
 
-__all__ = ['BaseModel', 'ArcFaceModel', 'ArcFaceMaxOutModel', 'ArcFaceMultiModalModel', 'NanModel']
+__all__ = ['BaseModel', 'ArcFaceModel', 'ArcFaceMaxOutModel', 'ArcFaceMultiModalModel', 'ArcFaceNanModel']
 
 
 class BaseModel(nn.Module):
@@ -163,15 +163,14 @@ class ArcFaceMultiModalModel(nn.Module):
         return output
 
 
-class NanModel(nn.Module):
-    def __init__(self, in_features, out_features, num_attn=1, use_gpu=True):
-        super(NanModel, self).__init__()
+class ArcFaceNanModel(nn.Module):
+    def __init__(self, in_features, out_features, num_attn=1):
+        super(ArcFaceNanModel, self).__init__()
         self.in_features = in_features
         self.out_features = out_features
         self.num_attn = num_attn
-        self.use_gpu = use_gpu
 
-        self.nan = NanAttentionLayer(self.in_features, self.num_attn, use_gpu=self.use_gpu)
+        self.nan_layer = NanAttentionLayer(self.in_features, self.num_attn)
 
         self.fc = nn.Sequential(nn.Linear(self.in_features, self.in_features * 2),
                                 nn.BatchNorm1d(self.in_features * 2),
@@ -190,7 +189,7 @@ class NanModel(nn.Module):
         nn.init.xavier_uniform_(self.weight)
 
     def forward(self, feats):
-        x = self.nan(feats)
+        x = self.nan_layer(feats)
 
         output = self.fc(x)
         output = x + output
@@ -201,5 +200,5 @@ class NanModel(nn.Module):
 
 if __name__ == '__main__':
     data = torch.randn((4, 512, 30))
-    model = NanModel(512, 1000, num_attn=3, use_gpu=False)
+    model = ArcFaceNanModel(512, 1000, num_attn=3)
     print(model(data).size())

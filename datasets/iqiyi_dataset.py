@@ -13,9 +13,9 @@ from utils import load_face_from_pickle, load_train_gt_from_txt, check_exists, \
     default_pre_progress, default_transforms, default_target_transforms, load_val_gt_from_txt, \
     default_retain_noise_in_val, default_vid_retain_noise_in_val, \
     default_vid_pre_progress, default_vid_transforms, default_vid_target_transforms, default_vid_remove_noise_in_val, \
-    default_remove_noise_in_val, load_head_from_pickle, load_body_from_pickle, load_infos
+    default_remove_noise_in_val, load_head_from_pickle, load_body_from_pickle
 
-__all__ = ['IQiYiVidDataset', 'IQiYiFaceDataset', 'IQiYiHeadDataset', 'IQiYiBodyDataset', 'IQiYiSepDataset']
+__all__ = ['IQiYiVidDataset', 'IQiYiFaceDataset', 'IQiYiHeadDataset', 'IQiYiBodyDataset']
 
 FEAT_PATH = 'feat'
 
@@ -173,7 +173,7 @@ class IQiYiVidDataset(data.Dataset):
         vid_name = vid_info['video_name']
 
         if len(self.modes) == 1:
-            feat = self.transform(vid_info, self.modes, **self.kwargs)
+            feat, = self.transform(vid_info, self.modes, **self.kwargs)
             return feat, label, vid_name
         elif len(self.modes) == 2:
             feat_1, feat_2 = self.transform(vid_info, self.modes, **self.kwargs)
@@ -431,70 +431,6 @@ class IQiYiBodyDataset(data.Dataset):
         label = self.target_transform(label, **self.kwargs)
 
         return feat, label, video_name
-
-    def __len__(self):
-        return self.length
-
-
-class IQiYiSepDataset(data.Dataset):
-    def __init__(self, root, tvt='train', transform=None, target_transform=None, embedding_size=479, **kwargs):
-        assert check_exists(root)
-        assert tvt in ['train', 'val', 'test']
-
-        self.root = os.path.expanduser(root)
-        self.tvt = tvt
-        self.transform = transform
-        self.target_transform = target_transform
-        self.embedding_size = embedding_size
-        self.kwargs = kwargs
-
-        if self.transform is None:
-            self.transform = default_transforms
-        if self.target_transform is None:
-            self.target_transform = default_target_transforms
-
-        if self.tvt == 'train':
-            self.feats_path = os.path.join(self.root, FEAT_PATH, FACE_TRAIN_NAME)
-            self.gt_path = os.path.join(self.root, FEAT_PATH, TRAIN_GT_NAME)
-        elif self.tvt == 'val':
-            self.feats_path = os.path.join(self.root, FEAT_PATH, FACE_VAL_NAME)
-            self.gt_path = None
-        elif self.tvt == 'test':
-            self.feats_path = os.path.join(self.root, FEAT_PATH, FACE_TEST_NAME)
-            self.gt_path = None
-
-        self._init_feat_labels()
-
-    def _init_feat_labels(self):
-        video_infos = load_face_from_pickle(self.feats_path)
-        if self.tvt == 'train':
-            gt_labels = load_train_gt_from_txt(self.gt_path)
-        else:
-            gt_labels = {}
-        self.feats, self.qs, self.ds, self.bboxes, self.labels, self.video_names, = \
-            load_infos(video_infos, gt_labels, self.embedding_size, **self.kwargs)
-
-        self.length = len(self.feats)
-
-        assert len(self.feats) == len(self.qs)
-        assert len(self.feats) == len(self.ds)
-        assert len(self.feats) == len(self.bboxes)
-        assert len(self.feats) == len(self.labels)
-        assert len(self.feats) == len(self.video_names)
-
-    def __getitem__(self, index):
-        feat = self.feats[index]
-        q = self.qs[index]
-        d = self.ds[index]
-        label = self.labels[index]
-        video_name = self.video_names[index]
-
-        feat = self.transform(feat, **self.kwargs)
-        q = self.transform(q, **self.kwargs)
-        d = self.transform(d, **self.kwargs)
-        label = self.target_transform(label, **self.kwargs)
-
-        return feat, q, d, label, video_name
 
     def __len__(self):
         return self.length

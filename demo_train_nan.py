@@ -12,46 +12,44 @@ import torch
 from torch import optim
 from torch.utils.data import DataLoader
 
-from datasets import IQiYiSepDataset
-from models import NanModel, FocalLoss, ArcMarginProduct
-from utils import check_exists, save_model
+from datasets import IQiYiVidDataset
+from models import ArcFaceNanModel, FocalLoss, ArcMarginProduct
+from utils import check_exists, save_model, sep_vid_transforms
 
 
 def main(args):
     if not check_exists(args.save_dir):
         os.makedirs(args.save_dir)
 
-    dataset = IQiYiSepDataset(args.root, 'train', embedding_size=args.embedding_size)
-
+    dataset = IQiYiVidDataset(args.data_root, 'train', 'face', transform=sep_vid_transforms, num_frame=args.num_frame)
     data_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
 
     log_step = len(data_loader) // 10 if len(data_loader) > 10 else 1
 
-    model = NanModel(args.feat_dim, args.num_classes, num_attn=args.num_attn)
+    model = ArcFaceNanModel(args.feat_dim, args.num_classes, num_attn=args.num_attn)
     metric_func = ArcMarginProduct()
     loss_func = FocalLoss()
 
-    optimizer_model = optim.SGD(model.parameters(), lr=args.learning_rate, momentum=0.9, weight_decay=1e-5)
-    lr_scheduler = optim.lr_scheduler.StepLR(optimizer_model, args.num_decay)
+    optimizer = optim.SGD(model.parameters(), lr=args.learning_rate, momentum=0.9, weight_decay=1e-5)
+    lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.epoch)
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     model = model.to(device)
 
-    for epoch_idx in range(args.num_epoch):
+    for epoch_idx in range(args.epoch):
         total_loss = .0
-        for batch_idx, (feats, _, _, labels, _) in enumerate(data_loader):
-
+        for batch_idx, (feats, labels, _) in enumerate(data_loader):
             feats = feats.to(device)
             labels = labels.to(device)
 
-            optimizer_model.zero_grad()
+            optimizer.zero_grad()
 
             outputs = model(feats)
             outputs_metric = metric_func(outputs, labels)
             local_loss = loss_func(outputs_metric, labels)
 
             local_loss.backward()
-            optimizer_model.step()
+            optimizer.step()
 
             total_loss += local_loss.item()
 
@@ -60,7 +58,7 @@ def main(args):
                       .format(epoch_idx, batch_idx * args.batch_size, len(dataset),
                               100.0 * batch_idx / len(data_loader), local_loss.item()))
         log = {'epoch': epoch_idx,
-               'lr': optimizer_model.param_groups[0]['lr'],
+               'lr': optimizer.param_groups[0]['lr'],
                'loss': total_loss / len(data_loader)}
 
         for key, value in sorted(log.items(), key=lambda item: item[0]):
@@ -68,33 +66,23 @@ def main(args):
 
         lr_scheduler.step()
 
-        save_model(model, args.save_dir, 'test_model', epoch_idx)
+    save_model(model, args.save_dir, 'demo_arcface_nan_model', 100)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='PyTorch Template')
-    parser.add_argument('-r', '--root', default='/data/materials', type=str,
-                        help='path to load data (default: /data/materials)')
-    parser.add_argument('-s', '--save_dir', default='./checkpoints/nan/', type=str,
+    parser.add_argument('--data_root', default='/data/materials', type=str,
+                        help='path to load data (default: /data/materials/)')
+    parser.add_argument('--save_dir', default='./checkpoints/', type=str,
                         help='path to save model (default: ./checkpoints/)')
-    parser.add_argument('-d', '--device', default='2', type=str,
-                        help='indices of GPUs to enable (default: all)')
-    parser.add_argument('-n', '--num_classes', default=10035, type=int,
-                        help='number of classes (default: 10035)')
-    parser.add_argument('-b', '--batch_size', default=4096, type=int,
-                        help='dim of feature (default: 4096)')
-    parser.add_argument('-dim', '--feat_dim', default=512, type=int,
-                        help='dim of feature (default: 512)')
-    parser.add_argument('-e', '--embedding_size', default=30, type=int,
-                        help='size of video length (default: 479)')
-    parser.add_argument('-lr', '--learning_rate', type=float, default=0.1,
-                        help="learning rate for model (default: 0.1)")
-    parser.add_argument('-decay', '--num_decay', type=int, default=25,
-                        help="learning rate decay every iter")
-    parser.add_argument('-epoch', '--num_epoch', default=100, type=int,
-                        help='number of epoch (default: 200)')
-    parser.add_argument('-attn', '--num_attn', default=1, type=int,
-                        help='number of attention block in NAN')
+    parser.add_argument('--epoch', type=int, default=100, help="the epoch num for train (default: 100)")
+    parser.add_argument('--device', default=None, type=str, help='indices of GPUs to enable (default: all)')
+    parser.add_argument('--num_classes', default=10035, type=int, help='number of classes (default: 10035)')
+    parser.add_argument('--batch_size', default=4096, type=int, help='dim of feature (default: 4096)')
+    parser.add_argument('--feat_dim', default=512, type=int, help='dim of feature (default: 512)')
+    parser.add_argument('--learning_rate', type=float, default=0.1, help="learning rate for model (default: 0.1)")
+    parser.add_argument('--num_frame', default=30, type=int, help='size of video length (default: 30)')
+    parser.add_argument('--num_attn', default=1, type=int, help='number of attention block in NAN')
     args = parser.parse_args()
 
     if args.device:

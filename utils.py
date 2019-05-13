@@ -18,7 +18,7 @@ __all__ = ['init_logging', 'check_exists', 'load_train_gt_from_txt', 'load_val_g
            'max_score_face_pre_progress', 'average_pre_progress', 'weighted_average_face_pre_progress',
            'default_retain_noise_in_val', 'default_vid_pre_progress', 'default_vid_retain_noise_in_val',
            'default_vid_transforms', 'default_vid_target_transforms', 'default_vid_remove_noise_in_val',
-           'default_remove_noise_in_val', 'makedir','load_infos']
+           'default_remove_noise_in_val', 'sep_vid_transforms']
 
 LOG_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
 logger = logging.getLogger(__name__)
@@ -271,19 +271,35 @@ def default_remove_noise_in_val(feats, labels, video_names, **kwargs):
     return feats, labels, video_names
 
 
-def default_vid_transforms(vid_info, modes, frame_num=15, **kwargs):
+def default_vid_transforms(vid_info, modes, num_frame=15, **kwargs):
     result = []
     for mode in modes:
         frames_infos = vid_info[mode]
-        if len(frames_infos) < frame_num:
-            frames_infos = np.random.choice(frames_infos, frame_num, replace=True)
+        if len(frames_infos) < num_frame:
+            frames_infos = np.random.choice(frames_infos, num_frame, replace=True)
         else:
-            frames_infos = np.random.choice(frames_infos, frame_num, replace=False)
+            frames_infos = np.random.choice(frames_infos, num_frame, replace=False)
         temp_feats = []
         for frames_info in frames_infos:
             temp_feats.append(frames_info['feat'])
         mean_feat = np.mean(np.array(temp_feats), axis=0)
         result.append(torch.from_numpy(mean_feat).float())
+    return result
+
+
+def sep_vid_transforms(vid_info, modes, num_frame=15, **kwargs):
+    result = []
+    for mode in modes:
+        frames_infos = vid_info[mode]
+        if len(frames_infos) < num_frame:
+            frames_infos = np.random.choice(frames_infos, num_frame, replace=True)
+        else:
+            frames_infos = np.random.choice(frames_infos, num_frame, replace=False)
+        temp_feats = []
+        for frames_info in frames_infos:
+            temp_feats.append(frames_info['feat'])
+        feats = np.array(temp_feats)
+        result.append(torch.from_numpy(feats).float())
     return result
 
 
@@ -456,40 +472,6 @@ def load_audio_from_pickle(file_path):
     return video_infos
 
 
-def makedir(path):
-    if not os.path.join(path):
-        os.makedirs(path)
 
 
-def load_infos(video_infos, gt_infos, embedding_size, **kwargs):
-    feats = []
-    qs = []
-    ds = []
-    bboxs = []
-    labels = []
-    video_names = []
 
-    for video_info in video_infos:
-        video_name = video_info['video_name']
-        frame_infos = video_info['frame_infos']
-
-        if len(frame_infos) > 0:
-            if embedding_size <= len(frame_infos):
-                index = np.random.choice(range(len(frame_infos)), embedding_size, replace=False)
-            else:
-                index = np.random.choice(range(len(frame_infos)), embedding_size, replace=True)
-
-            feat = [frame_infos[i]['feat'] for i in index]
-            q = [frame_infos[i]['quality_score'] for i in index]
-            d = [frame_infos[i]['det_score'] for i in index]
-            bbox = [frame_infos[i]['bbox'] for i in index]
-            label = gt_infos.get(video_name, 0)
-
-            feats.append(feat)
-            qs.append(q)
-            ds.append(d)
-            bboxs.append(bbox)
-            labels.append(label)
-            video_names.append(video_name)
-
-    return feats, qs, ds, bboxs, labels, video_names

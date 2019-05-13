@@ -17,7 +17,7 @@ class NanAttentionLayer(nn.Module):
         reference: Neural Aggregation Network for Video Face Recognition, CVPR 2017
     """
 
-    def __init__(self, feat_dim, num_attn=1, use_gpu=True):
+    def __init__(self, feat_dim, num_attn=1):
         super(NanAttentionLayer, self).__init__()
         self.feat_dim = feat_dim
         self.num_attn = num_attn
@@ -25,12 +25,8 @@ class NanAttentionLayer(nn.Module):
         self.tanh = nn.Tanh()
         self.q = nn.Parameter(torch.ones((1, 1, self.feat_dim)) * .0)
 
-        if use_gpu:
-            self.attns = [NanAttentionBlock().cuda() for i in range(self.num_attn)]
-            self.fcs = [nn.Linear(self.feat_dim, self.feat_dim).cuda() for i in range(self.num_attn - 1)]
-        else:
-            self.attns = [NanAttentionBlock() for i in range(self.num_attn)]
-            self.fcs = [nn.Linear(self.feat_dim, self.feat_dim) for i in range(self.num_attn - 1)]
+        self.attns = nn.ModuleList([NanAttentionBlock() for _ in range(self.num_attn)])
+        self.fcs = nn.ModuleList([nn.Linear(self.feat_dim, self.feat_dim) for _ in range(self.num_attn - 1)])
 
         for fc in self.fcs:
             fc.weight.data.zero_()
@@ -57,6 +53,7 @@ class NanAttentionBlock(nn.Module):
     """
     no learnable parameters, just a callable block.
     """
+
     def __init__(self):
         super(NanAttentionBlock, self).__init__()
 

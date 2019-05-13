@@ -132,8 +132,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='IQIYI VID FACE 2019')
     parser.add_argument('--data_root', default='/data/materials', type=str,
                         help='path to load data (default: /data/materials/)')
-    parser.add_argument('--save_dir', default='./checkpoints/', type=str,
-                        help='path to save model (default: ./checkpoints/)')
+    parser.add_argument('--save_dir', default='./checkpoints/bagging/', type=str,
+                        help='path to save model (default: ./checkpoints/bagging/)')
     parser.add_argument('--epoch', type=int, default=200, help="the epoch num for train (default: 200)")
     parser.add_argument('--device', default=None, type=str, help='indices of GPUs to enable (default: all)')
     parser.add_argument('--num_classes', default=10035, type=int, help='number of classes (default: 10035)')
