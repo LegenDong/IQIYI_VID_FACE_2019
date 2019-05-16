@@ -23,7 +23,7 @@ def main(args):
         os.makedirs(args.save_dir)
 
     if args.moda == 'face':
-        dataset = IQiYiFaceDataset(args.data_root, 'train+val-noise', pre_progress=weighted_average_face_pre_progress)
+        dataset = IQiYiFaceDataset(args.data_root, 'train', pre_progress=weighted_average_face_pre_progress)
     elif args.moda == 'head':
         dataset = IQiYiHeadDataset(args.data_root, 'train+val-noise', pre_progress=average_pre_progress)
     elif args.moda == 'body':
@@ -37,7 +37,7 @@ def main(args):
 
     model = ArcFaceModel(args.feat_dim, args.num_classes)
     metric_func = ArcMarginProduct()
-    loss_func = FocalLoss()
+    loss_func = FocalLoss(gamma=2.)
 
     optimizer = optim.SGD(model.parameters(), lr=args.learning_rate, momentum=0.9, weight_decay=1e-5)
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.epoch)

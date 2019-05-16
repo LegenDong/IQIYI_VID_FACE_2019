@@ -9,9 +9,10 @@ import torch.nn.functional as F
 from torch import nn
 from torch.nn import Parameter
 
-from models.layer import MultiModalAttentionLayer, NanAttentionLayer
+from models.layer import MultiModalAttentionLayer, NanAttentionLayer, VLADLayer
 
-__all__ = ['BaseModel', 'ArcFaceModel', 'ArcFaceMaxOutModel', 'ArcFaceMultiModalModel', 'ArcFaceNanModel']
+__all__ = ['BaseModel', 'ArcFaceModel', 'ArcFaceMaxOutModel', 'ArcFaceMultiModalModel', 'ArcFaceNanModel',
+           'ArcFaceVLADModel', 'ArcFaceSimpleModel']
 
 
 class BaseModel(nn.Module):
@@ -65,6 +66,21 @@ class ArcFaceModel(nn.Module):
         output = self.fc(x)
         output = x + output
         output = F.linear(F.normalize(output), F.normalize(self.weight))
+
+        return output
+
+
+class ArcFaceSimpleModel(nn.Module):
+    def __init__(self, in_features, out_features, ):
+        super(ArcFaceSimpleModel, self).__init__()
+        self.in_features = in_features
+        self.out_features = out_features
+
+        self.weight = Parameter(torch.FloatTensor(self.out_features, self.in_features))
+        nn.init.xavier_uniform_(self.weight)
+
+    def forward(self, x):
+        output = F.linear(F.normalize(x), F.normalize(self.weight))
 
         return output
 
@@ -198,7 +214,38 @@ class ArcFaceNanModel(nn.Module):
         return output
 
 
-if __name__ == '__main__':
-    data = torch.randn((4, 512, 30))
-    model = ArcFaceNanModel(512, 1000, num_attn=3)
-    print(model(data).size())
+class ArcFaceVLADModel(nn.Module):
+    def __init__(self, in_features, out_features, num_cluster=3):
+        super(ArcFaceVLADModel, self).__init__()
+        self.in_features = in_features
+        self.out_features = out_features
+        self.num_cluster = num_cluster
+
+        self.middle_features = in_features * num_cluster
+
+        self.vlad_layer = VLADLayer(self.in_features, self.num_cluster)
+
+        self.fc = nn.Sequential(nn.Linear(self.middle_features, self.middle_features * 2),
+                                nn.BatchNorm1d(self.middle_features * 2),
+                                nn.PReLU(),
+                                nn.Dropout(),
+                                nn.Linear(self.middle_features * 2, self.in_features),
+                                nn.BatchNorm1d(self.in_features),
+                                nn.PReLU(), )
+
+        nn.init.kaiming_normal_(self.fc[0].weight)
+        nn.init.constant_(self.fc[0].bias, .0)
+        nn.init.kaiming_normal_(self.fc[4].weight)
+        nn.init.constant_(self.fc[4].bias, .0)
+
+        self.weight = Parameter(torch.FloatTensor(self.out_features, self.in_features))
+        nn.init.xavier_uniform_(self.weight)
+
+    def forward(self, x):
+        output = x.transpose(1, 2).unsqueeze(-1)
+        output = self.vlad_layer(output)
+
+        output = self.fc(output) + output
+        output = F.linear(F.normalize(output), F.normalize(self.weight))
+
+        return output

@@ -14,21 +14,22 @@ from torch.utils.data import DataLoader
 
 from datasets import IQiYiVidDataset
 from models import ArcFaceNanModel, FocalLoss, ArcMarginProduct
-from utils import check_exists, save_model, sep_vid_transforms
+from utils import check_exists, save_model, sep_cat_qds_vid_transforms
 
 
 def main(args):
     if not check_exists(args.save_dir):
         os.makedirs(args.save_dir)
 
-    dataset = IQiYiVidDataset(args.data_root, 'train', 'face', transform=sep_vid_transforms, num_frame=args.num_frame)
+    dataset = IQiYiVidDataset(args.data_root, 'train', 'face', transform=sep_cat_qds_vid_transforms,
+                              num_frame=args.num_frame)
     data_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
 
     log_step = len(data_loader) // 10 if len(data_loader) > 10 else 1
 
     model = ArcFaceNanModel(args.feat_dim, args.num_classes, num_attn=args.num_attn)
     metric_func = ArcMarginProduct()
-    loss_func = FocalLoss()
+    loss_func = FocalLoss(gamma=2.)
 
     optimizer = optim.SGD(model.parameters(), lr=args.learning_rate, momentum=0.9, weight_decay=1e-5)
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.epoch)
@@ -79,9 +80,9 @@ if __name__ == '__main__':
     parser.add_argument('--device', default=None, type=str, help='indices of GPUs to enable (default: all)')
     parser.add_argument('--num_classes', default=10035, type=int, help='number of classes (default: 10035)')
     parser.add_argument('--batch_size', default=4096, type=int, help='dim of feature (default: 4096)')
-    parser.add_argument('--feat_dim', default=512, type=int, help='dim of feature (default: 512)')
+    parser.add_argument('--feat_dim', default=512 + 2, type=int, help='dim of feature (default: 512 + 2)')
     parser.add_argument('--learning_rate', type=float, default=0.1, help="learning rate for model (default: 0.1)")
-    parser.add_argument('--num_frame', default=30, type=int, help='size of video length (default: 30)')
+    parser.add_argument('--num_frame', default=40, type=int, help='size of video length (default: 40)')
     parser.add_argument('--num_attn', default=1, type=int, help='number of attention block in NAN')
     args = parser.parse_args()
 

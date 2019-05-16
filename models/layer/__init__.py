@@ -7,3 +7,4 @@
 
 from .multi_modal_attention_layer import *
 from .nan_attention_layer import *
+from .vlad_layer import *

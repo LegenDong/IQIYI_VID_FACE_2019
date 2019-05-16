@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# @Time    : 2019/5/9 11:33
+# @Time    : 2019/5/15 16:24
 # @Author  : LegenDong
 # @User    : legendong
-# @File    : demo_train_bagging.py
+# @File    : demo_train_bagging_simple.py
 # @Software: PyCharm
 import argparse
 import os
@@ -14,7 +14,7 @@ import torch
 from torch import optim
 
 from datasets import IQiYiFaceDataset, BaseDataLoader, IQiYiHeadDataset, IQiYiBodyDataset
-from models import FocalLoss, ArcMarginProduct, ArcFaceModel
+from models import FocalLoss, ArcMarginProduct, ArcFaceSimpleModel
 from utils import check_exists, weighted_average_face_pre_progress, topk_func, save_model, average_pre_progress
 
 
@@ -92,7 +92,7 @@ def main(args):
 
     train_log_step = len(train_loader) // 10 if len(train_loader) > 10 else 1
 
-    model = ArcFaceModel(args.feat_dim, args.num_classes, )
+    model = ArcFaceSimpleModel(args.feat_dim, args.num_classes)
     metric_func = ArcMarginProduct()
     loss_func = FocalLoss()
 

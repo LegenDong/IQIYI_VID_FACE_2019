@@ -18,7 +18,8 @@ __all__ = ['init_logging', 'check_exists', 'load_train_gt_from_txt', 'load_val_g
            'max_score_face_pre_progress', 'average_pre_progress', 'weighted_average_face_pre_progress',
            'default_retain_noise_in_val', 'default_vid_pre_progress', 'default_vid_retain_noise_in_val',
            'default_vid_transforms', 'default_vid_target_transforms', 'default_vid_remove_noise_in_val',
-           'default_remove_noise_in_val', 'sep_vid_transforms']
+           'default_remove_noise_in_val', 'sep_vid_transforms', 'sep_cat_qds_vid_transforms',
+           'default_identity_target_transforms', 'default_identity_transforms', 'default_identity_pre_progress']
 
 LOG_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
 logger = logging.getLogger(__name__)
@@ -216,7 +217,30 @@ def default_vid_pre_progress(video_infos, gt_infos, **kwargs):
         elif len(value.keys()) < len(video_infos.keys()):
             to_dels.append(key)
         elif len(value.keys()) > len(video_infos.keys()):
-            logger.error('the vid {} has wrong num of the key {}'.format(key, ' '.join(value.keys())))
+            logger.error('the vid {} has wrong num of the moda {}'.format(key, ' '.join(value.keys())))
+    for to_del in to_dels:
+        del vid_infos[to_del]
+    return list(vid_infos.values())
+
+
+def default_identity_pre_progress(video_infos, gt_infos, pr=1., **kwargs):
+    vid_infos = {}
+    for key, values in video_infos.items():
+        for value in values:
+            frame_infos = value['frame_infos']
+            video_name = value['video_name']
+            if len(frame_infos) > 0 and \
+                    (('TRAIN' in video_name) or
+                     (gt_infos.get(key, 0) != 0 and 'VAL' in video_name and random.uniform(0, 1) < pr)):
+                vid_infos.setdefault(gt_infos.get(value['video_name'], 0), {}).setdefault(key, []).extend(frame_infos)
+    to_dels = []
+    for key, value in vid_infos.items():
+        if len(value.keys()) == len(video_infos.keys()):
+            vid_infos[key]['label'] = key
+        elif len(value.keys()) < len(video_infos.keys()):
+            to_dels.append(key)
+        elif len(value.keys()) > len(video_infos.keys()):
+            logger.error('the vid {} has wrong num of the moda {}'.format(key, ' '.join(value.keys())))
     for to_del in to_dels:
         del vid_infos[to_del]
     return list(vid_infos.values())
@@ -303,6 +327,44 @@ def sep_vid_transforms(vid_info, modes, num_frame=15, **kwargs):
     return result
 
 
+def sep_cat_qds_vid_transforms(vid_info, modes, num_frame=15, norm_value=200., **kwargs):
+    result = []
+    for mode in modes:
+        frames_infos = vid_info[mode]
+        if len(frames_infos) < num_frame:
+            frames_infos = np.random.choice(frames_infos, num_frame, replace=True)
+        else:
+            frames_infos = np.random.choice(frames_infos, num_frame, replace=False)
+        temp_feats = []
+        for frame_info in frames_infos:
+            feat = frame_info['feat']
+            if mode == 'face':
+                feat = np.append(feat, frame_info['quality_score'] / norm_value)
+            else:
+                feat = np.append(feat, frame_info['det_score'])
+            feat = np.append(feat, frame_info['det_score'])
+            temp_feats.append(feat)
+        feats = np.array(temp_feats)
+        result.append(torch.from_numpy(feats).float())
+    return result
+
+
+def default_identity_transforms(vid_info, modes, num_frame=15, **kwargs):
+    result = []
+    for mode in modes:
+        frames_infos = vid_info[mode]
+        if len(frames_infos) < num_frame:
+            frames_infos = np.random.choice(frames_infos, num_frame, replace=True)
+        else:
+            frames_infos = np.random.choice(frames_infos, num_frame, replace=False)
+        temp_feats = []
+        for frames_info in frames_infos:
+            temp_feats.append(frames_info['feat'])
+        mean_feat = np.mean(np.array(temp_feats), axis=0)
+        result.append(torch.from_numpy(mean_feat).float())
+    return result
+
+
 def default_transforms(feat, **kwargs):
     feat_np = np.array(feat)
     feat_torch = torch.from_numpy(feat_np).float()
@@ -310,6 +372,13 @@ def default_transforms(feat, **kwargs):
 
 
 def default_vid_target_transforms(vid_info, **kwargs):
+    label = vid_info['label']
+    label_np = np.array(label)
+    label_torch = torch.from_numpy(label_np).long()
+    return label_torch
+
+
+def default_identity_target_transforms(vid_info, **kwargs):
     label = vid_info['label']
     label_np = np.array(label)
     label_torch = torch.from_numpy(label_np).long()
@@ -470,8 +539,3 @@ def load_audio_from_pickle(file_path):
             'feat': audio_feat})
 
     return video_infos
-
-
-
-
-

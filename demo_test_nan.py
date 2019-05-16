@@ -14,7 +14,7 @@ from torch.utils.data import DataLoader
 
 from datasets import IQiYiVidDataset
 from models import ArcFaceNanModel
-from utils import check_exists, default_get_result, init_logging, sep_vid_transforms
+from utils import check_exists, default_get_result, init_logging, sep_cat_qds_vid_transforms
 
 logger = logging.getLogger(__name__)
 
@@ -23,10 +23,10 @@ def main(data_root, num_frame, num_attn):
     load_path = './checkpoints/demo_arcface_nan_model_0100.pth'
     assert check_exists(load_path)
 
-    dataset = IQiYiVidDataset(data_root, 'test', 'face', transform=sep_vid_transforms, num_frame=num_frame)
+    dataset = IQiYiVidDataset(data_root, 'test', 'face', transform=sep_cat_qds_vid_transforms, num_frame=num_frame)
     data_loader = DataLoader(dataset, batch_size=2048, shuffle=False, num_workers=1)
 
-    model = ArcFaceNanModel(512, 10034 + 1, num_attn=num_attn)
+    model = ArcFaceNanModel(512 + 2, 10034 + 1, num_attn=num_attn)
     metric_func = torch.nn.Softmax(-1)
 
     logger.info('load model from {}'.format(load_path))
@@ -40,6 +40,7 @@ def main(data_root, num_frame, num_attn):
 
     model.eval()
     all_results = []
+    outputs = []
 
     with torch.no_grad():
         for batch_idx, (feats, _, video_names) in enumerate(data_loader):
@@ -50,8 +51,10 @@ def main(data_root, num_frame, num_attn):
             output = metric_func(output)
 
             results = default_get_result(output.cpu(), video_names)
+            outputs.append(output.cpu())
             all_results += list(results)
-    return all_results
+    max_value_video_idx = torch.argmax(torch.cat(outputs, dim=0), dim=0)
+    return all_results, max_value_video_idx
 
 
 if __name__ == '__main__':
@@ -63,7 +66,7 @@ if __name__ == '__main__':
                         help='path to save log (default: /data/logs/)')
     parser.add_argument('--result_root', default='/data/result/', type=str,
                         help='path to save result (default: /data/result/)')
-    parser.add_argument('--num_frame', default=30, type=int, help='size of video length (default: 30)')
+    parser.add_argument('--num_frame', default=40, type=int, help='size of video length (default: 40)')
     parser.add_argument('--num_attn', default=1, type=int, help='number of attention block in NAN')
 
     args = parser.parse_args()
@@ -93,7 +96,7 @@ if __name__ == '__main__':
 
     init_logging(log_path)
 
-    all_results = main(args.data_root, args.num_frame, args.num_attn)
+    all_results, max_value_video_idx = main(args.data_root, args.num_frame, args.num_attn)
 
     results_dict = {}
     for result in all_results:
@@ -104,17 +107,27 @@ if __name__ == '__main__':
             results_dict[key].append((*result[1:],))
 
     with open(result_path, 'w', encoding='utf-8') as f:
-        for key, value in sorted(results_dict.items(), key=lambda item: item[0]):
-            if key > 0:
+        for i in range(1, 10035):
+            value = results_dict.get(i, None)
+            if value is None:
+                idx = max_value_video_idx[i]
+                video_names_str = '{}.mp4'.format(all_results[idx][2])
+                f.write('{} {}\n'.format(i, video_names_str))
+            else:
                 value.sort(key=lambda k: k[0], reverse=True)
                 value = ['{}.mp4'.format(i[1]) for i in value[:100]]
                 video_names_str = ' '.join(value)
-                f.write('{} {}\n'.format(key, video_names_str))
+                f.write('{} {}\n'.format(i, video_names_str))
 
     with open(result_log_path, 'w', encoding='utf-8') as f:
-        for key, value in sorted(results_dict.items(), key=lambda item: item[0]):
-            if key > 0:
+        for i in range(1, 10035):
+            value = results_dict.get(i, None)
+            if value is None:
+                idx = max_value_video_idx[i]
+                video_names_str = '{}.mp4'.format(all_results[idx][2])
+                f.write('{} {}\n'.format(i, video_names_str))
+            else:
                 value.sort(key=lambda k: k[0], reverse=True)
                 value = ['{}.mp4'.format(i[1]) for i in value[:100]]
                 video_names_str = ' '.join(value)
-                f.write('{} {}\n'.format(key, video_names_str))
+                f.write('{} {}\n'.format(i, video_names_str))

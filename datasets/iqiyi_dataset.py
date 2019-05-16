@@ -9,13 +9,13 @@ import os
 from torch.utils import data
 
 import utils as module
-from utils import load_face_from_pickle, load_train_gt_from_txt, check_exists, \
+from utils import load_face_from_pickle, load_train_gt_from_txt, check_exists, default_identity_target_transforms, \
     default_pre_progress, default_transforms, default_target_transforms, load_val_gt_from_txt, \
-    default_retain_noise_in_val, default_vid_retain_noise_in_val, \
+    default_retain_noise_in_val, default_vid_retain_noise_in_val, default_identity_transforms, \
     default_vid_pre_progress, default_vid_transforms, default_vid_target_transforms, default_vid_remove_noise_in_val, \
-    default_remove_noise_in_val, load_head_from_pickle, load_body_from_pickle
+    default_remove_noise_in_val, load_head_from_pickle, load_body_from_pickle, default_identity_pre_progress
 
-__all__ = ['IQiYiVidDataset', 'IQiYiFaceDataset', 'IQiYiHeadDataset', 'IQiYiBodyDataset']
+__all__ = ['IQiYiVidDataset', 'IQiYiIdentityDataset', 'IQiYiFaceDataset', 'IQiYiHeadDataset', 'IQiYiBodyDataset']
 
 FEAT_PATH = 'feat'
 
@@ -171,6 +171,117 @@ class IQiYiVidDataset(data.Dataset):
 
         label = self.target_transform(vid_info, **self.kwargs)
         vid_name = vid_info['video_name']
+
+        if len(self.modes) == 1:
+            feat, = self.transform(vid_info, self.modes, **self.kwargs)
+            return feat, label, vid_name
+        elif len(self.modes) == 2:
+            feat_1, feat_2 = self.transform(vid_info, self.modes, **self.kwargs)
+            return feat_1, feat_2, label, vid_name
+        elif len(self.modes) == 3:
+            feat_1, feat_2, feat_3 = self.transform(vid_info, self.modes, **self.kwargs)
+            return feat_1, feat_2, feat_3, label, vid_name
+
+    def __len__(self):
+        return self.length
+
+
+class IQiYiIdentityDataset(data.Dataset):
+    def __init__(self, root, tvt='train', modes='face', transform=None, target_transform=None, pre_progress=None,
+                 **kwargs):
+        modes = modes.split('+')
+
+        assert check_exists(root)
+        assert tvt in ['train', 'val', 'train+val', 'train+noise', 'train+val-noise', ]
+        assert 0 < len(modes) < 4
+        for sub in modes:
+            assert sub in ['face', 'head', 'body']
+
+        self.root = os.path.expanduser(root)
+        self.tvt = tvt
+        self.modes = modes
+        self.transform = transform
+        self.target_transform = target_transform
+        self.pre_progress = pre_progress
+        self.kwargs = kwargs
+
+        if self.pre_progress is None:
+            self.pre_progress = default_identity_pre_progress
+        else:
+            assert 'identity' in pre_progress.__name__.lower()
+        if self.transform is None:
+            self.transform = default_identity_transforms
+        else:
+            assert 'identity' in transform.__name__.lower()
+        if self.target_transform is None:
+            self.target_transform = default_identity_target_transforms
+        else:
+            assert 'identity' in target_transform.__name__.lower()
+
+        if self.tvt == 'train':
+            self.feats_paths = {}
+            for mode in modes:
+                self.feats_paths[mode] = os.path.join(self.root, FEAT_PATH, gen_file_name(mode, 'train'))
+            self.gt_path = os.path.join(self.root, TRAIN_GT_NAME)
+        elif self.tvt == 'val':
+            self.feats_paths = {}
+            for mode in modes:
+                self.feats_paths[mode] = os.path.join(self.root, FEAT_PATH, gen_file_name(mode, 'val'))
+            self.gt_path = os.path.join(self.root, VAL_GT_NAME)
+        elif self.tvt == 'train+val' or self.tvt == 'train+noise' or self.tvt == 'train+val-noise':
+            self.train_feats_paths = {}
+            self.val_feats_paths = {}
+            for mode in modes:
+                self.train_feats_paths[mode] = os.path.join(self.root, FEAT_PATH, gen_file_name(mode, 'train'))
+                self.val_feats_paths[mode] = os.path.join(self.root, FEAT_PATH, gen_file_name(mode, 'val'))
+            self.train_gt_path = os.path.join(self.root, TRAIN_GT_NAME)
+            self.val_gt_path = os.path.join(self.root, VAL_GT_NAME)
+        else:
+            raise RuntimeError
+
+        self._init_feat_labels()
+
+    def _init_feat_labels(self):
+        if self.tvt == 'train':
+            video_infos = {}
+            for key, value in self.feats_paths.items():
+                assert hasattr(module, TEMPLATE_LOAD_PICKLE.format(key))
+                load_func = getattr(module, TEMPLATE_LOAD_PICKLE.format(key))
+                video_infos[key] = load_func(value)
+            gt_labels = load_train_gt_from_txt(self.gt_path)
+        elif self.tvt == 'val':
+            video_infos = {}
+            for key, value in self.feats_paths.items():
+                assert hasattr(module, TEMPLATE_LOAD_PICKLE.format(key))
+                load_func = getattr(module, TEMPLATE_LOAD_PICKLE.format(key))
+                video_infos[key] = load_func(value)
+            gt_labels = load_val_gt_from_txt(self.gt_path)
+        elif self.tvt == 'train+val' or self.tvt == 'train+noise' or self.tvt == 'train+val-noise':
+            video_infos = {}
+            for key, value in self.train_feats_paths.items():
+                assert hasattr(module, TEMPLATE_LOAD_PICKLE.format(key))
+                load_func = getattr(module, TEMPLATE_LOAD_PICKLE.format(key))
+                video_infos[key] = []
+                video_infos[key] += load_func(value)
+                video_infos[key] += load_func(self.val_feats_paths[key])
+
+            gt_labels = {}
+            gt_labels.update(load_train_gt_from_txt(self.train_gt_path))
+            gt_labels.update(load_val_gt_from_txt(self.val_gt_path))
+        else:
+            raise RuntimeError
+
+        if self.tvt == 'train+val-noise':
+            self.vid_infos = self.pre_progress(video_infos, gt_labels, pr=.0, **self.kwargs)
+        self.vid_infos = self.pre_progress(video_infos, gt_labels, **self.kwargs)
+
+        self.length = len(self.vid_infos)
+
+    def __getitem__(self, index):
+        vid_info = self.vid_infos[index]
+
+        label = self.target_transform(vid_info, **self.kwargs)
+        vid_name = ''
 
         if len(self.modes) == 1:
             feat, = self.transform(vid_info, self.modes, **self.kwargs)
