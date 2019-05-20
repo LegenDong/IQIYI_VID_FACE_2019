@@ -19,12 +19,12 @@ from utils import check_exists, default_get_result, init_logging, sep_cat_qds_vi
 logger = logging.getLogger(__name__)
 
 
-def main(data_root, num_frame, num_attn):
-    load_path = './checkpoints/demo_arcface_nan_model_0100.pth'
+def main(data_root, num_frame, num_attn, moda, epoch):
+    load_path = './checkpoints/demo_arcface_{}_nan_model_{:0>4d}.pth'.format(moda, epoch)
     assert check_exists(load_path)
 
-    dataset = IQiYiVidDataset(data_root, 'test', 'face', transform=sep_cat_qds_vid_transforms, num_frame=num_frame)
-    data_loader = DataLoader(dataset, batch_size=2048, shuffle=False, num_workers=1)
+    dataset = IQiYiVidDataset(data_root, 'test', moda, transform=sep_cat_qds_vid_transforms, num_frame=num_frame)
+    data_loader = DataLoader(dataset, batch_size=2048, shuffle=False, num_workers=0)
 
     model = ArcFaceNanModel(512 + 2, 10034 + 1, num_attn=num_attn)
     metric_func = torch.nn.Softmax(-1)
@@ -53,8 +53,8 @@ def main(data_root, num_frame, num_attn):
             results = default_get_result(output.cpu(), video_names)
             outputs.append(output.cpu())
             all_results += list(results)
-    max_value_video_idx = torch.argmax(torch.cat(outputs, dim=0), dim=0)
-    return all_results, max_value_video_idx
+    outputs = torch.cat(outputs, dim=0)
+    return all_results, outputs
 
 
 if __name__ == '__main__':
@@ -68,6 +68,8 @@ if __name__ == '__main__':
                         help='path to save result (default: /data/result/)')
     parser.add_argument('--num_frame', default=40, type=int, help='size of video length (default: 40)')
     parser.add_argument('--num_attn', default=1, type=int, help='number of attention block in NAN')
+    parser.add_argument('--moda', default='face', type=str, help='modal[face, head] of model train, (default: face)')
+    parser.add_argument('--epoch', type=int, default=100, help="the epoch num for train (default: 100)")
 
     args = parser.parse_args()
 
@@ -96,7 +98,8 @@ if __name__ == '__main__':
 
     init_logging(log_path)
 
-    all_results, max_value_video_idx = main(args.data_root, args.num_frame, args.num_attn)
+    all_results, outputs = main(args.data_root, args.num_frame, args.num_attn, args.moda, args.epoch)
+    max_value_video_idx = torch.argmax(outputs, dim=0)
 
     results_dict = {}
     for result in all_results:

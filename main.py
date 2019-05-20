@@ -12,83 +12,35 @@ import time
 import numpy as np
 import torch
 
-import demo_test_arcface
-import demo_test_mm
+import demo_test_nan
 from utils import check_exists, init_logging
 
 logger = logging.getLogger(__name__)
 
 
-# def main(method_idx, data_root):
-#     if method_idx == 0:
-#         return demo_test_arcface.main(data_root, 'face')
-#     elif method_idx == 1:
-#         return demo_test_mm.main(data_root)
-#     elif method_idx == 2:
-#         results_1 = demo_test_arcface.main(data_root, 'face')
-#         results_2 = demo_test_arcface.main(data_root, 'head')
-#         results_3 = demo_test_arcface.main(data_root, 'body')
-#
-#         vid_names = []
-#         for result in results_1:
-#             vid_names.append(result[2])
-#         for result in results_2:
-#             if result[2] not in vid_names:
-#                 vid_names.append(result[2])
-#                 results_1.append(result)
-#         for result in results_3:
-#             if result[2] not in vid_names:
-#                 vid_names.append(result[2])
-#                 results_1.append(result)
-#
-#         return results_1
-#     elif method_idx == 3:
-#         results_1 = demo_test_mm.main(data_root)
-#         results_2 = demo_test_arcface.main(data_root, 'face')
-#         results_3 = demo_test_arcface.main(data_root, 'head')
-#         results_4 = demo_test_arcface.main(data_root, 'body')
-#
-#         vid_names = []
-#         for result in results_1:
-#             vid_names.append(result[2])
-#         for result in results_2:
-#             if result[2] not in vid_names:
-#                 vid_names.append(result[2])
-#                 results_1.append(result)
-#         for result in results_3:
-#             if result[2] not in vid_names:
-#                 vid_names.append(result[2])
-#                 results_1.append(result)
-#         for result in results_4:
-#             if result[2] not in vid_names:
-#                 vid_names.append(result[2])
-#                 results_1.append(result)
-#
-#         return results_1
-
-
 def main(data_root):
-    results_1 = demo_test_mm.main(data_root)
-    results_2 = demo_test_arcface.main(data_root, 'face')
-    results_3 = demo_test_arcface.main(data_root, 'head')
-    results_4 = demo_test_arcface.main(data_root, 'body')
+    results_1, outputs_1 = demo_test_nan.main(data_root, 40, 1, 'face', 100)
+    results_2, _ = demo_test_nan.main(data_root, 40, 1, 'head', 200)
+
+    max_video_idx_1 = torch.argmax(outputs_1, dim=0)
+    temp_label_dict = {}
+    for label_idx in range(1, 10034):
+        temp_label_dict[label_idx] = False
+    for result in results_1:
+        temp_label_dict[result[0].item()] = True
+    for key, value in temp_label_dict.items():
+        if not value:
+            video_idx = max_video_idx_1[key]
+            results_1.append((torch.from_numpy(np.array(key)), outputs_1[video_idx][key], results_1[video_idx][2]))
+            logger.info('set video {} with prob {} as {}'
+                        .format(key, outputs_1[video_idx][key].item(), results_1[video_idx][2]))
 
     vid_names = []
     for result in results_1:
         vid_names.append(result[2])
     for result in results_2:
         if result[2] not in vid_names:
-            logger.info('vid {} use the result from face'.format(result[2]))
-            vid_names.append(result[2])
-            results_1.append(result)
-    for result in results_3:
-        if result[2] not in vid_names:
             logger.info('vid {} use the result from head'.format(result[2]))
-            vid_names.append(result[2])
-            results_1.append(result)
-    for result in results_4:
-        if result[2] not in vid_names:
-            logger.info('vid {} use the result from body'.format(result[2]))
             vid_names.append(result[2])
             results_1.append(result)
 
@@ -127,7 +79,7 @@ if __name__ == '__main__':
     for result in all_results:
         key = result[0].int().item()
         if key not in results_dict.keys():
-            results_dict[key] = [(*result[1:],)]
+            results_dict[key] = [(result[1:],)]
         else:
             results_dict[key].append((*result[1:],))
 

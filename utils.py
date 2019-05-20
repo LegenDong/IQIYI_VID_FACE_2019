@@ -18,7 +18,7 @@ __all__ = ['init_logging', 'check_exists', 'load_train_gt_from_txt', 'load_val_g
            'max_score_face_pre_progress', 'average_pre_progress', 'weighted_average_face_pre_progress',
            'default_retain_noise_in_val', 'default_vid_pre_progress', 'default_vid_retain_noise_in_val',
            'default_vid_transforms', 'default_vid_target_transforms', 'default_vid_remove_noise_in_val',
-           'default_remove_noise_in_val', 'sep_vid_transforms', 'sep_cat_qds_vid_transforms',
+           'default_remove_noise_in_val', 'sep_vid_transforms', 'sep_cat_qds_vid_transforms', 'sep_identity_transforms',
            'default_identity_target_transforms', 'default_identity_transforms', 'default_identity_pre_progress']
 
 LOG_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
@@ -327,7 +327,7 @@ def sep_vid_transforms(vid_info, modes, num_frame=15, **kwargs):
     return result
 
 
-def sep_cat_qds_vid_transforms(vid_info, modes, num_frame=15, norm_value=200., **kwargs):
+def sep_cat_qds_vid_transforms(vid_info, modes, num_frame=15, norm_value=100., **kwargs):
     result = []
     for mode in modes:
         frames_infos = vid_info[mode]
@@ -344,6 +344,22 @@ def sep_cat_qds_vid_transforms(vid_info, modes, num_frame=15, norm_value=200., *
                 feat = np.append(feat, frame_info['det_score'])
             feat = np.append(feat, frame_info['det_score'])
             temp_feats.append(feat)
+        feats = np.array(temp_feats)
+        result.append(torch.from_numpy(feats).float())
+    return result
+
+
+def sep_identity_transforms(vid_info, modes, num_frame=15, **kwargs):
+    result = []
+    for mode in modes:
+        frames_infos = vid_info[mode]
+        if len(frames_infos) < num_frame:
+            frames_infos = np.random.choice(frames_infos, num_frame, replace=True)
+        else:
+            frames_infos = np.random.choice(frames_infos, num_frame, replace=False)
+        temp_feats = []
+        for frames_info in frames_infos:
+            temp_feats.append(frames_info['feat'])
         feats = np.array(temp_feats)
         result.append(torch.from_numpy(feats).float())
     return result

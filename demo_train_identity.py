@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# @Time    : 2019/4/20 20:36
+# @Time    : 2019/5/16 22:07
 # @Author  : LegenDong
 # @User    : legendong
-# @File    : demo_train_arcface.py
+# @File    : demo_train_identity.py
 # @Software: PyCharm
 import argparse
 import os
@@ -13,29 +13,21 @@ import torch
 from torch import optim
 from torch.utils.data import DataLoader
 
-from datasets import IQiYiFaceDataset, IQiYiHeadDataset, IQiYiBodyDataset
-from models import ArcFaceModel, FocalLoss, ArcMarginProduct
-from utils import check_exists, save_model, weighted_average_face_pre_progress, average_pre_progress
+from datasets import IQiYiIdentityDataset
+from models import FocalLoss, ArcMarginProduct, ArcFaceNanModel
+from utils import check_exists, save_model, sep_identity_transforms
 
 
 def main(args):
     if not check_exists(args.save_dir):
         os.makedirs(args.save_dir)
 
-    if args.moda == 'face':
-        dataset = IQiYiFaceDataset(args.data_root, 'train+val-noise', pre_progress=weighted_average_face_pre_progress)
-    elif args.moda == 'head':
-        dataset = IQiYiHeadDataset(args.data_root, 'train+val-noise', pre_progress=average_pre_progress)
-    elif args.moda == 'body':
-        dataset = IQiYiBodyDataset(args.data_root, 'train+val-noise', pre_progress=average_pre_progress)
-    else:
-        raise RuntimeError
-
+    dataset = IQiYiIdentityDataset(args.data_root, 'train', 'face', transform=sep_identity_transforms, num_frame=40)
     data_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
 
     log_step = len(data_loader) // 10 if len(data_loader) > 10 else 1
 
-    model = ArcFaceModel(args.feat_dim, args.num_classes)
+    model = ArcFaceNanModel(args.feat_dim, args.num_classes, 1)
     metric_func = ArcMarginProduct()
     loss_func = FocalLoss(gamma=2.)
 
@@ -76,7 +68,7 @@ def main(args):
 
         lr_scheduler.step()
 
-    save_model(model, args.save_dir, 'demo_arcface_{}_model'.format(args.moda), 100)
+    save_model(model, args.save_dir, 'demo_arcface_identity_nan_model', args.epoch)
 
 
 if __name__ == '__main__':

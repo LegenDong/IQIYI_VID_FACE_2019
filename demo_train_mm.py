@@ -69,7 +69,7 @@ def main(args):
 
         lr_scheduler.step()
 
-    save_model(model, args.save_dir, 'demo_arcface_face+head_model', 100)
+    save_model(model, args.save_dir, 'demo_arcface_face+head_model', args.epoch)
 
 
 if __name__ == '__main__':

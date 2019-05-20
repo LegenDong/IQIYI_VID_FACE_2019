@@ -25,7 +25,7 @@ def main(data_root):
     assert check_exists(load_path)
 
     dataset = IQiYiVidDataset(data_root, 'test', modes='face+head')
-    data_loader = DataLoader(dataset, batch_size=2048, shuffle=False, num_workers=1)
+    data_loader = DataLoader(dataset, batch_size=2048, shuffle=False, num_workers=0)
 
     model = ArcFaceMultiModalModel(512, 10034 + 1)
     metric_func = torch.nn.Softmax(-1)

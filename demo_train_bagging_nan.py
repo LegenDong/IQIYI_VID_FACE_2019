@@ -78,7 +78,9 @@ def main(args):
     if not check_exists(args.save_dir):
         os.makedirs(args.save_dir)
 
-    dataset = IQiYiVidDataset(args.data_root, 'train+val-noise', 'face', transform=sep_vid_transforms,
+    assert args.moda in ['face', 'head']
+
+    dataset = IQiYiVidDataset(args.data_root, 'train+val-noise', args.moda, transform=sep_vid_transforms,
                               num_frame=args.num_frame)
     train_loader = BaseDataLoader(dataset, batch_size=args.batch_size, shuffle=True,
                                   validation_split=0.1, num_workers=4)
@@ -88,7 +90,7 @@ def main(args):
 
     model = ArcFaceNanModel(args.feat_dim, args.num_classes, num_attn=args.num_attn)
     metric_func = ArcMarginProduct()
-    loss_func = FocalLoss()
+    loss_func = FocalLoss(gamma=2.0)
 
     optimizer = optim.SGD(model.parameters(), lr=args.learning_rate, momentum=0.9, weight_decay=1e-5)
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.epoch)
@@ -108,8 +110,8 @@ def main(args):
         for key, value in sorted(test_log.items(), key=lambda item: item[0]):
             print('    {:20s}: {:6f}'.format(str(key), value))
 
-        if epoch_idx % args.save_interval == 0 and epoch_idx != 0:
-            save_model(model, args.save_dir, 'test_model', epoch_idx, is_best=False)
+        # if epoch_idx % args.save_interval == 0 and epoch_idx != 0:
+        #     save_model(model, args.save_dir, 'test_model', epoch_idx, is_best=False)
 
         test_acc = test_log['top1 acc']
         if max_test_acc < test_acc:
@@ -133,7 +135,7 @@ if __name__ == '__main__':
                         help='path to load data (default: /data/materials/)')
     parser.add_argument('--save_dir', default='./checkpoints/bagging/', type=str,
                         help='path to save model (default: ./checkpoints/bagging/)')
-    parser.add_argument('--epoch', type=int, default=200, help="the epoch num for train (default: 200)")
+    parser.add_argument('--epoch', type=int, default=200, help="the epoch num for train (default: 100)")
     parser.add_argument('--device', default=None, type=str, help='indices of GPUs to enable (default: all)')
     parser.add_argument('--num_classes', default=10035, type=int, help='number of classes (default: 10035)')
     parser.add_argument('--batch_size', default=4096, type=int, help='dim of feature (default: 4096)')
@@ -142,6 +144,7 @@ if __name__ == '__main__':
     parser.add_argument('--learning_rate', type=float, default=0.1, help="learning rate for model (default: 0.1)")
     parser.add_argument('--num_frame', default=30, type=int, help='size of video length (default: 30)')
     parser.add_argument('--num_attn', default=1, type=int, help='number of attention block in NAN')
+    parser.add_argument('--moda', default='face', type=str, help='modal[face, head] of model train, (default: face)')
 
     args = parser.parse_args()
 

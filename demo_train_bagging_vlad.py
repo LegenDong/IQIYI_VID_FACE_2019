@@ -133,7 +133,7 @@ if __name__ == '__main__':
                         help='path to load data (default: /data/materials/)')
     parser.add_argument('--save_dir', default='./checkpoints/bagging/', type=str,
                         help='path to save model (default: ./checkpoints/bagging/)')
-    parser.add_argument('--epoch', type=int, default=200, help="the epoch num for train (default: 200)")
+    parser.add_argument('--epoch', type=int, default=100, help="the epoch num for train (default: 100)")
     parser.add_argument('--device', default=None, type=str, help='indices of GPUs to enable (default: all)')
     parser.add_argument('--num_classes', default=10035, type=int, help='number of classes (default: 10035)')
     parser.add_argument('--batch_size', default=4096, type=int, help='dim of feature (default: 4096)')

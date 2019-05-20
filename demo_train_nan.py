@@ -21,7 +21,9 @@ def main(args):
     if not check_exists(args.save_dir):
         os.makedirs(args.save_dir)
 
-    dataset = IQiYiVidDataset(args.data_root, 'train', 'face', transform=sep_cat_qds_vid_transforms,
+    assert args.moda in ['face', 'head']
+
+    dataset = IQiYiVidDataset(args.data_root, 'train+val-noise', args.moda, transform=sep_cat_qds_vid_transforms,
                               num_frame=args.num_frame)
     data_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
 
@@ -67,7 +69,7 @@ def main(args):
 
         lr_scheduler.step()
 
-    save_model(model, args.save_dir, 'demo_arcface_nan_model', 100)
+    save_model(model, args.save_dir, 'demo_arcface_{}_nan_model'.format(args.moda), args.epoch)
 
 
 if __name__ == '__main__':
@@ -84,6 +86,7 @@ if __name__ == '__main__':
     parser.add_argument('--learning_rate', type=float, default=0.1, help="learning rate for model (default: 0.1)")
     parser.add_argument('--num_frame', default=40, type=int, help='size of video length (default: 40)')
     parser.add_argument('--num_attn', default=1, type=int, help='number of attention block in NAN')
+    parser.add_argument('--moda', default='face', type=str, help='modal[face, head] of model train, (default: face)')
     args = parser.parse_args()
 
     if args.device:
