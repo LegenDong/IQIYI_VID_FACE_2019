@@ -6,18 +6,24 @@
 # @Software: PyCharm
 import os
 
+import numpy as np
+from PIL import Image
 from torch.utils import data
+from torchvision import transforms
 
 import utils as module
 from utils import load_face_from_pickle, load_train_gt_from_txt, check_exists, default_identity_target_transforms, \
     default_pre_progress, default_transforms, default_target_transforms, load_val_gt_from_txt, \
     default_retain_noise_in_val, default_vid_retain_noise_in_val, default_identity_transforms, \
     default_vid_pre_progress, default_vid_transforms, default_vid_target_transforms, default_vid_remove_noise_in_val, \
-    default_remove_noise_in_val, load_head_from_pickle, load_body_from_pickle, default_identity_pre_progress
+    default_remove_noise_in_val, load_head_from_pickle, load_body_from_pickle, default_identity_pre_progress, \
+    default_image_pre_progress, default_image_transforms, default_image_target_transforms
 
-__all__ = ['IQiYiVidDataset', 'IQiYiIdentityDataset', 'IQiYiFaceDataset', 'IQiYiHeadDataset', 'IQiYiBodyDataset']
+__all__ = ['IQiYiVidDataset', 'IQiYiIdentityDataset', 'IQiYiFaceDataset', 'IQiYiHeadDataset', 'IQiYiBodyDataset',
+           'IQiYiFaceImageDataset']
 
 FEAT_PATH = 'feat'
+IMAGE_PATH = 'img'
 
 FACE_TRAIN_NAME = 'face_train_v2.pickle'
 FACE_VAL_NAME = 'face_val_v2.pickle'
@@ -35,6 +41,8 @@ TRAIN_GT_NAME = 'train_gt.txt'
 VAL_GT_NAME = 'val_gt.txt'
 
 TEMPLATE_LOAD_PICKLE = 'load_{}_from_pickle'
+
+MEAN_BGR_VGGFACE2 = np.array([91.4953, 103.8827, 131.0912])
 
 
 def gen_file_name(mode, tvt):
@@ -292,6 +300,114 @@ class IQiYiIdentityDataset(data.Dataset):
         elif len(self.modes) == 3:
             feat_1, feat_2, feat_3 = self.transform(vid_info, self.modes, **self.kwargs)
             return feat_1, feat_2, feat_3, label, vid_name
+
+    def __len__(self):
+        return self.length
+
+
+class IQiYiFaceImageDataset(data.Dataset):
+    def __init__(self, root, tvt='train', is_extract=True, padding_ratio=1.14, transform=None, target_transform=None,
+                 pre_progress=None, **kwargs):
+        assert check_exists(root)
+        assert tvt in ['train', 'val', 'train+val', 'train+noise', 'train+val-noise', 'test', ]
+
+        self.root = os.path.expanduser(root)
+        self.tvt = tvt
+        self.is_extract = is_extract
+        self.padding_ratio = padding_ratio
+        self.transform = transform
+        self.target_transform = target_transform
+        self.pre_progress = pre_progress
+        self.kwargs = kwargs
+        self.image_root = os.path.join(self.root, IMAGE_PATH)
+
+        if self.is_extract:
+            self.augm_func = transforms.Compose([
+                transforms.Resize(256),
+                transforms.CenterCrop(224),
+            ])
+        else:
+            self.augm_func = transforms.Compose([
+                transforms.Resize(256),
+                transforms.RandomCrop(224),
+                transforms.RandomHorizontalFlip(p=0.5),
+                transforms.ColorJitter(brightness=0.4, saturation=0.4, hue=0.4),
+                transforms.RandomGrayscale(p=0.2),
+            ])
+
+        if self.pre_progress is None:
+            self.pre_progress = default_image_pre_progress
+        else:
+            assert 'image' in pre_progress.__name__.lower()
+        if self.transform is None:
+            self.transform = default_image_transforms
+        else:
+            assert 'image' in transform.__name__.lower()
+        if self.target_transform is None:
+            self.target_transform = default_image_target_transforms
+        else:
+            assert 'image' in target_transform.__name__.lower()
+
+        if self.tvt == 'train':
+            self.feats_path = os.path.join(self.root, FEAT_PATH, FACE_TRAIN_NAME)
+            self.gt_path = os.path.join(self.root, TRAIN_GT_NAME)
+        elif self.tvt == 'val':
+            self.feats_path = os.path.join(self.root, FEAT_PATH, FACE_VAL_NAME)
+            self.gt_path = os.path.join(self.root, VAL_GT_NAME)
+        elif self.tvt == 'train+val' or self.tvt == 'train+noise' or self.tvt == 'train+val-noise':
+            self.train_feats_path = os.path.join(self.root, FEAT_PATH, FACE_TRAIN_NAME)
+            self.val_feats_path = os.path.join(self.root, FEAT_PATH, FACE_VAL_NAME)
+            self.train_gt_path = os.path.join(self.root, TRAIN_GT_NAME)
+            self.val_gt_path = os.path.join(self.root, VAL_GT_NAME)
+        elif self.tvt == 'test':
+            self.feats_path = os.path.join(self.root, FEAT_PATH, FACE_TEST_NAME)
+            self.gt_path = None
+
+        self._init_feat_labels()
+
+    def _init_feat_labels(self):
+        if self.tvt == 'train':
+            video_infos = load_face_from_pickle(self.feats_path)
+            gt_labels = load_train_gt_from_txt(self.gt_path)
+        elif self.tvt == 'val':
+            video_infos = load_face_from_pickle(self.feats_path)
+            gt_labels = load_val_gt_from_txt(self.gt_path)
+        elif self.tvt == 'train+val' or self.tvt == 'train+noise' or self.tvt == 'train+val-noise':
+            video_infos = []
+            video_infos += load_face_from_pickle(self.train_feats_path)
+            video_infos += load_face_from_pickle(self.val_feats_path)
+
+            gt_labels = {}
+            gt_labels.update(load_train_gt_from_txt(self.train_gt_path))
+            gt_labels.update(load_val_gt_from_txt(self.val_gt_path))
+        else:
+            video_infos = load_face_from_pickle(self.feats_path)
+            gt_labels = {}
+
+        self.file_paths, self.labels, self.video_names, self.bboxes \
+            = self.pre_progress(video_infos, gt_labels, self.image_root, **self.kwargs)
+        # if self.tvt == 'train+noise':
+        #     self.feats, self.labels, self.video_names \
+        #         = default_retain_noise_in_val(self.feats, self.labels, self.video_names, **self.kwargs)
+        # elif self.tvt == 'train+val-noise':
+        #     self.feats, self.labels, self.video_names \
+        #         = default_remove_noise_in_val(self.feats, self.labels, self.video_names, **self.kwargs)
+        self.length = len(self.file_paths)
+
+        assert len(self.file_paths) == len(self.bboxes)
+        assert len(self.bboxes) == len(self.labels)
+        assert len(self.labels) == len(self.video_names)
+
+    def __getitem__(self, index):
+        image_path = self.file_paths[index]
+        bbox = self.bboxes[index]
+        label = self.labels[index]
+        video_name = self.video_names[index]
+
+        image_data = Image.open(image_path).convert('RGB')
+        image_data = self.transform(image_data, bbox, MEAN_BGR_VGGFACE2, self.augm_func, self.padding_ratio)
+        label = self.target_transform(label)
+        return image_data, label, video_name
 
     def __len__(self):
         return self.length

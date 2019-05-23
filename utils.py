@@ -19,7 +19,8 @@ __all__ = ['init_logging', 'check_exists', 'load_train_gt_from_txt', 'load_val_g
            'default_retain_noise_in_val', 'default_vid_pre_progress', 'default_vid_retain_noise_in_val',
            'default_vid_transforms', 'default_vid_target_transforms', 'default_vid_remove_noise_in_val',
            'default_remove_noise_in_val', 'sep_vid_transforms', 'sep_cat_qds_vid_transforms', 'sep_identity_transforms',
-           'default_identity_target_transforms', 'default_identity_transforms', 'default_identity_pre_progress']
+           'default_identity_target_transforms', 'default_identity_transforms', 'default_identity_pre_progress',
+           'default_image_pre_progress', 'default_image_transforms', 'default_image_target_transforms']
 
 LOG_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
 logger = logging.getLogger(__name__)
@@ -202,6 +203,31 @@ def default_pre_progress(video_infos, gt_infos, max_value=None, min_value=None, 
     return feats, labels, video_names
 
 
+def default_image_pre_progress(video_infos, gt_infos, image_root, **kwargs):
+    file_paths = []
+    bboxes = []
+    labels = []
+    video_names = []
+    for video_info in video_infos:
+        video_name = video_info['video_name']
+        frame_infos = video_info['frame_infos']
+
+        if len(frame_infos) == 0:
+            continue
+
+        for frame_info in frame_infos:
+            bbox = frame_info['bbox']
+            label = gt_infos.get(video_name, 0)
+            frame_id = frame_info['frame_id']
+            file_path = os.path.join(image_root, video_name, '{:0>6d}.jpg'.format(frame_id))
+
+            bboxes.append(bbox)
+            file_paths.append(file_path)
+            labels.append(label)
+            video_names.append(video_name)
+    return file_paths, labels, video_names, bboxes
+
+
 def default_vid_pre_progress(video_infos, gt_infos, **kwargs):
     vid_infos = {}
     for key, values in video_infos.items():
@@ -381,6 +407,34 @@ def default_identity_transforms(vid_info, modes, num_frame=15, **kwargs):
     return result
 
 
+def default_image_transforms(image_data, bbox, mean_bgr, augm_func, ratio, **kwargs):
+    bbox = _padding_bbox(bbox, ratio)
+    image_data = image_data.crop(bbox)
+    image_data = augm_func(image_data)
+    image_data = np.array(image_data, dtype=np.uint8)
+    image_data = _trans_img(image_data, mean_bgr)
+
+    return image_data
+
+
+def _trans_img(img, mean_bgr):
+    img = img[:, :, ::-1]  # RGB -> BGR
+    img = img.astype(np.float32)
+    img -= mean_bgr
+    img = img.transpose(2, 0, 1)  # C x H x W
+    img = torch.from_numpy(img).float()
+    return img
+
+
+def _padding_bbox(bbox, ratio=1.):
+    x1, y1, x2, y2 = bbox
+    x_padding = (ratio - 1) * (x2 - x1) / 2
+    y_padding = (ratio - 1) * (y2 - y1) / 2
+    bbox = (x1 - x_padding, y1 - y_padding, x2 + x_padding, y2 + y_padding)
+
+    return bbox
+
+
 def default_transforms(feat, **kwargs):
     feat_np = np.array(feat)
     feat_torch = torch.from_numpy(feat_np).float()
@@ -402,6 +456,12 @@ def default_identity_target_transforms(vid_info, **kwargs):
 
 
 def default_target_transforms(label, **kwargs):
+    label_np = np.array(label)
+    label_torch = torch.from_numpy(label_np).long()
+    return label_torch
+
+
+def default_image_target_transforms(label, **kwargs):
     label_np = np.array(label)
     label_torch = torch.from_numpy(label_np).long()
     return label_torch
@@ -456,7 +516,7 @@ def load_face_from_pickle(file_path):
             assert (0 <= y1 <= y2)
             assert (type(det_score) == float)
             assert (type(quality_score) == float)
-            assert (feat.dtype == np.float16 and feat.shape[0] == 512)
+            assert (feat.dtype == np.float16 and (feat.shape[0] == 512 or feat.shape[0] == 2048))
 
             frame_infos.append({'frame_id': last_fame_num,
                                 'bbox': bbox,

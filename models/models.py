@@ -7,12 +7,15 @@
 import torch
 import torch.nn.functional as F
 from torch import nn
-from torch.nn import Parameter
+from torch.nn import Parameter, init
 
 from models.layer import MultiModalAttentionLayer, NanAttentionLayer, VLADLayer
+from .se_resnet import se_resnet50
 
 __all__ = ['BaseModel', 'ArcFaceModel', 'ArcFaceMaxOutModel', 'ArcFaceMultiModalModel', 'ArcFaceNanModel',
-           'ArcFaceVLADModel', 'ArcFaceSimpleModel']
+           'ArcFaceVLADModel', 'ArcFaceSimpleModel', 'VGGFaceModel']
+
+SENET_PATH = './model_zoo/senet50_vggface2.pth'
 
 
 class BaseModel(nn.Module):
@@ -249,3 +252,38 @@ class ArcFaceVLADModel(nn.Module):
         output = F.linear(F.normalize(output), F.normalize(self.weight))
 
         return output
+
+
+class VGGFaceModel(nn.Module):
+    def __init__(self, num_classes=1000, include_top=True):
+        super(VGGFaceModel, self).__init__()
+        self.num_classes = num_classes
+        self.include_top = include_top
+
+        self.model_path = SENET_PATH
+
+        self._init_modules()
+
+    def _init_modules(self):
+        se_resnet = se_resnet50(num_classes=8631)
+
+        print('loading pre-trained weight for se_resnet from {}.'.format(self.model_path))
+        state_dict = torch.load(self.model_path)
+        se_resnet.load_state_dict({k: v for k, v in state_dict.items() if k in se_resnet.state_dict()})
+
+        self.base_model = nn.Sequential(se_resnet.conv1, se_resnet.bn1, se_resnet.relu, se_resnet.maxpool,
+                                        se_resnet.layer1, se_resnet.layer2, se_resnet.layer3, se_resnet.layer4)
+        self.global_avgpool = nn.AdaptiveAvgPool2d((1, 1))
+        self.fc = nn.Linear(512 * se_resnet.layer4[-1].expansion, self.num_classes)
+
+        init.kaiming_normal_(self.fc.weight.data)
+
+    def forward(self, x):
+        out = self.base_model(x)
+        out = self.global_avgpool(out)
+        out = out.view(out.size(0), -1)
+
+        if self.include_top:
+            out = self.fc(out)
+
+        return out

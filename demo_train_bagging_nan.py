@@ -139,7 +139,7 @@ if __name__ == '__main__':
     parser.add_argument('--device', default=None, type=str, help='indices of GPUs to enable (default: all)')
     parser.add_argument('--num_classes', default=10035, type=int, help='number of classes (default: 10035)')
     parser.add_argument('--batch_size', default=4096, type=int, help='dim of feature (default: 4096)')
-    parser.add_argument('--feat_dim', default=512, type=int, help='dim of feature (default: 512)')
+    parser.add_argument('--feat_dim', default=2048, type=int, help='dim of feature (default: 512)')
     parser.add_argument('--save_interval', default=10, type=int, help='interval of epochs for save model (default: 10)')
     parser.add_argument('--learning_rate', type=float, default=0.1, help="learning rate for model (default: 0.1)")
     parser.add_argument('--num_frame', default=30, type=int, help='size of video length (default: 30)')
