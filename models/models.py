@@ -7,13 +7,13 @@
 import torch
 import torch.nn.functional as F
 from torch import nn
-from torch.nn import Parameter, init
+from torch.nn import Parameter
 
 from models.layer import MultiModalAttentionLayer, NanAttentionLayer, VLADLayer
 from .se_resnet import se_resnet50
 
 __all__ = ['BaseModel', 'ArcFaceModel', 'ArcFaceMaxOutModel', 'ArcFaceMultiModalModel', 'ArcFaceNanModel',
-           'ArcFaceVLADModel', 'ArcFaceSimpleModel', 'VGGFaceModel']
+           'ArcFaceVLADModel', 'ArcFaceSimpleModel', 'ArcFaceSEResNetModel']
 
 SENET_PATH = './model_zoo/senet50_vggface2.pth'
 
@@ -254,9 +254,9 @@ class ArcFaceVLADModel(nn.Module):
         return output
 
 
-class VGGFaceModel(nn.Module):
+class ArcFaceSEResNetModel(nn.Module):
     def __init__(self, num_classes=1000, include_top=True):
-        super(VGGFaceModel, self).__init__()
+        super(ArcFaceSEResNetModel, self).__init__()
         self.num_classes = num_classes
         self.include_top = include_top
 
@@ -274,16 +274,16 @@ class VGGFaceModel(nn.Module):
         self.base_model = nn.Sequential(se_resnet.conv1, se_resnet.bn1, se_resnet.relu, se_resnet.maxpool,
                                         se_resnet.layer1, se_resnet.layer2, se_resnet.layer3, se_resnet.layer4)
         self.global_avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = nn.Linear(512 * se_resnet.layer4[-1].expansion, self.num_classes)
 
-        init.kaiming_normal_(self.fc.weight.data)
+        self.weight = Parameter(torch.FloatTensor(self.num_classes, 512 * se_resnet.layer4[-1].expansion))
+        nn.init.xavier_uniform_(self.weight)
 
     def forward(self, x):
-        out = self.base_model(x)
-        out = self.global_avgpool(out)
-        out = out.view(out.size(0), -1)
+        output = self.base_model(x)
+        output = self.global_avgpool(output)
+        output = output.view(output.size(0), -1)
 
         if self.include_top:
-            out = self.fc(out)
+            output = F.linear(F.normalize(output), F.normalize(self.weight))
 
-        return out
+        return output

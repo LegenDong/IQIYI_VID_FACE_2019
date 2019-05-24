@@ -14,7 +14,7 @@ from torch.utils.data import DataLoader
 
 from datasets import IQiYiVidDataset
 from models import ArcFaceNanModel
-from utils import check_exists, default_get_result, init_logging, sep_cat_qds_vid_transforms
+from utils import check_exists, init_logging, sep_cat_qds_vid_transforms
 
 logger = logging.getLogger(__name__)
 
@@ -39,9 +39,9 @@ def main(data_root, num_frame, num_attn, moda, epoch):
     logger.info('test model on {}'.format(device))
 
     model.eval()
-    all_results = []
-    outputs = []
 
+    all_outputs = []
+    all_video_names = []
     with torch.no_grad():
         for batch_idx, (feats, _, video_names) in enumerate(data_loader):
             logger.info('Test Model: {}/{}'.format(batch_idx, len(data_loader)))
@@ -49,12 +49,11 @@ def main(data_root, num_frame, num_attn, moda, epoch):
             feats = feats.to(device)
             output = model(feats)
             output = metric_func(output)
+            all_outputs.append(output.cpu())
+            all_video_names += video_names
 
-            results = default_get_result(output.cpu(), video_names)
-            outputs.append(output.cpu())
-            all_results += list(results)
-    outputs = torch.cat(outputs, dim=0)
-    return all_results, outputs
+    all_outputs = torch.cat(all_outputs, dim=0)
+    return all_outputs, all_video_names
 
 
 if __name__ == '__main__':
@@ -98,39 +97,13 @@ if __name__ == '__main__':
 
     init_logging(log_path)
 
-    all_results, outputs = main(args.data_root, args.num_frame, args.num_attn, args.moda, args.epoch)
-    max_value_video_idx = torch.argmax(outputs, dim=0)
+    all_outputs, all_video_names = main(args.data_root, args.num_frame, args.num_attn, args.moda, args.epoch)
 
-    results_dict = {}
-    for result in all_results:
-        key = result[0].int().item()
-        if key not in results_dict.keys():
-            results_dict[key] = [(*result[1:],)]
-        else:
-            results_dict[key].append((*result[1:],))
-
-    with open(result_path, 'w', encoding='utf-8') as f:
-        for i in range(1, 10035):
-            value = results_dict.get(i, None)
-            if value is None:
-                idx = max_value_video_idx[i]
-                video_names_str = '{}.mp4'.format(all_results[idx][2])
-                f.write('{} {}\n'.format(i, video_names_str))
-            else:
-                value.sort(key=lambda k: k[0], reverse=True)
-                value = ['{}.mp4'.format(i[1]) for i in value[:100]]
-                video_names_str = ' '.join(value)
-                f.write('{} {}\n'.format(i, video_names_str))
-
-    with open(result_log_path, 'w', encoding='utf-8') as f:
-        for i in range(1, 10035):
-            value = results_dict.get(i, None)
-            if value is None:
-                idx = max_value_video_idx[i]
-                video_names_str = '{}.mp4'.format(all_results[idx][2])
-                f.write('{} {}\n'.format(i, video_names_str))
-            else:
-                value.sort(key=lambda k: k[0], reverse=True)
-                value = ['{}.mp4'.format(i[1]) for i in value[:100]]
-                video_names_str = ' '.join(value)
-                f.write('{} {}\n'.format(i, video_names_str))
+    top100_value, top100_idxes = torch.topk(all_outputs, 100, dim=0)
+    with open(result_log_path, 'w', encoding='utf-8') as f_result_log:
+        with open(result_path, 'w', encoding='utf-8') as f_result:
+            for label_idx in range(1, 10034):
+                video_names_list = ['{}.mp4'.format(all_video_names[idx]) for idx in top100_idxes[:, label_idx]]
+                video_names_str = ' '.join(video_names_list)
+                f_result.write('{} {}\n'.format(label_idx, video_names_str))
+                f_result_log.write('{} {}\n'.format(label_idx, video_names_str))

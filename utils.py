@@ -20,7 +20,8 @@ __all__ = ['init_logging', 'check_exists', 'load_train_gt_from_txt', 'load_val_g
            'default_vid_transforms', 'default_vid_target_transforms', 'default_vid_remove_noise_in_val',
            'default_remove_noise_in_val', 'sep_vid_transforms', 'sep_cat_qds_vid_transforms', 'sep_identity_transforms',
            'default_identity_target_transforms', 'default_identity_transforms', 'default_identity_pre_progress',
-           'default_image_pre_progress', 'default_image_transforms', 'default_image_target_transforms']
+           'default_image_pre_progress', 'default_image_transforms', 'default_image_target_transforms',
+           'prepare_device']
 
 LOG_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
 logger = logging.getLogger(__name__)
@@ -28,6 +29,13 @@ logger = logging.getLogger(__name__)
 
 def init_logging(filename, level=logging.DEBUG, log_format=LOG_FORMAT):
     logging.basicConfig(filename=filename, level=level, format=log_format)
+
+
+def prepare_device():
+    n_gpu = torch.cuda.device_count()
+    device = torch.device('cuda:0' if n_gpu > 0 else 'cpu')
+    list_ids = list(range(n_gpu))
+    return device, list_ids
 
 
 def check_exists(file_paths):

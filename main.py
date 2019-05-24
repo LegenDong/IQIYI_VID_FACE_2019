@@ -19,32 +19,23 @@ logger = logging.getLogger(__name__)
 
 
 def main(data_root):
-    results_1, outputs_1 = demo_test_nan.main(data_root, 40, 1, 'face', 100)
-    results_2, _ = demo_test_nan.main(data_root, 40, 1, 'head', 200)
+    all_outputs_1, all_video_names_1 = demo_test_nan.main(data_root, 40, 1, 'face', 100)
+    all_outputs_2, all_video_names_2 = demo_test_nan.main(data_root, 40, 1, 'head', 200)
 
-    max_video_idx_1 = torch.argmax(outputs_1, dim=0)
-    temp_label_dict = {}
-    for label_idx in range(1, 10034):
-        temp_label_dict[label_idx] = False
-    for result in results_1:
-        temp_label_dict[result[0].item()] = True
-    for key, value in temp_label_dict.items():
-        if not value:
-            video_idx = max_video_idx_1[key]
-            results_1.append((torch.from_numpy(np.array(key)), outputs_1[video_idx][key], results_1[video_idx][2]))
-            logger.info('set video {} with prob {} as {}'
-                        .format(key, outputs_1[video_idx][key].item(), results_1[video_idx][2]))
+    new_all_outputs = []
+    new_all_video_names = []
 
-    vid_names = []
-    for result in results_1:
-        vid_names.append(result[2])
-    for result in results_2:
-        if result[2] not in vid_names:
-            logger.info('vid {} use the result from head'.format(result[2]))
-            vid_names.append(result[2])
-            results_1.append(result)
+    new_all_outputs.append(all_outputs_1)
+    new_all_video_names += all_video_names_1
 
-    return results_1
+    for video_idx in range(all_outputs_2.size(0)):
+        if all_video_names_2[video_idx] not in new_all_video_names:
+            logger.info('vid {} use the result from head'.format(all_video_names_2[video_idx]))
+            new_all_outputs.append(all_outputs_2[video_idx].view(1, -1))
+            new_all_video_names.append(all_video_names_2[video_idx])
+    new_all_outputs = torch.cat(new_all_outputs, dim=0)
+
+    return new_all_outputs, new_all_video_names
 
 
 if __name__ == '__main__':
@@ -73,28 +64,13 @@ if __name__ == '__main__':
 
     init_logging(log_path)
 
-    all_results = main(data_root)
+    all_outputs, all_video_names = main(data_root)
 
-    results_dict = {}
-    for result in all_results:
-        key = result[0].int().item()
-        if key not in results_dict.keys():
-            results_dict[key] = [(result[1:],)]
-        else:
-            results_dict[key].append((*result[1:],))
-
-    with open(result_path, 'w', encoding='utf-8') as f:
-        for key, value in sorted(results_dict.items(), key=lambda item: item[0]):
-            if key > 0:
-                value.sort(key=lambda k: k[0], reverse=True)
-                value = ['{}.mp4'.format(i[1]) for i in value[:100]]
-                video_names_str = ' '.join(value)
-                f.write('{} {}\n'.format(key, video_names_str))
-
-    with open(result_log_path, 'w', encoding='utf-8') as f:
-        for key, value in sorted(results_dict.items(), key=lambda item: item[0]):
-            if key > 0:
-                value.sort(key=lambda k: k[0], reverse=True)
-                value = ['{}.mp4'.format(i[1]) for i in value[:100]]
-                video_names_str = ' '.join(value)
-                f.write('{} {}\n'.format(key, video_names_str))
+    top100_value, top100_idxes = torch.topk(all_outputs, 100, dim=0)
+    with open(result_log_path, 'w', encoding='utf-8') as f_result_log:
+        with open(result_path, 'w', encoding='utf-8') as f_result:
+            for label_idx in range(1, 10034):
+                video_names_list = ['{}.mp4'.format(all_video_names[idx]) for idx in top100_idxes[:, label_idx]]
+                video_names_str = ' '.join(video_names_list)
+                f_result.write('{} {}\n'.format(label_idx, video_names_str))
+                f_result_log.write('{} {}\n'.format(label_idx, video_names_str))

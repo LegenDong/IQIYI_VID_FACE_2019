@@ -110,8 +110,8 @@ def main(args):
         for key, value in sorted(test_log.items(), key=lambda item: item[0]):
             print('    {:20s}: {:6f}'.format(str(key), value))
 
-        # if epoch_idx % args.save_interval == 0 and epoch_idx != 0:
-        #     save_model(model, args.save_dir, 'test_model', epoch_idx, is_best=False)
+        if epoch_idx % args.save_interval == 0 and epoch_idx != 0:
+            save_model(model, args.save_dir, 'test_model', epoch_idx, is_best=False)
 
         test_acc = test_log['top1 acc']
         if max_test_acc < test_acc:
