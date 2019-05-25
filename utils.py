@@ -20,8 +20,9 @@ __all__ = ['init_logging', 'check_exists', 'load_train_gt_from_txt', 'load_val_g
            'default_vid_transforms', 'default_vid_target_transforms', 'default_vid_remove_noise_in_val',
            'default_remove_noise_in_val', 'sep_vid_transforms', 'sep_cat_qds_vid_transforms', 'sep_identity_transforms',
            'default_identity_target_transforms', 'default_identity_transforms', 'default_identity_pre_progress',
-           'default_image_pre_progress', 'default_image_transforms', 'default_image_target_transforms',
-           'prepare_device']
+           'default_image_pre_progress', 'default_image_transforms', 'default_image_target_transforms', 'crop_image',
+           'prepare_device', 'default_image_remove_noise_in_val', 'default_scene_pre_progress',
+           'default_scene_transforms', 'default_scene_target_transforms', 'default_scene_remove_noise_in_val']
 
 LOG_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
 logger = logging.getLogger(__name__)
@@ -236,6 +237,24 @@ def default_image_pre_progress(video_infos, gt_infos, image_root, **kwargs):
     return file_paths, labels, video_names, bboxes
 
 
+def default_scene_pre_progress(gt_infos, image_root, **kwargs):
+    file_paths = []
+    labels = []
+    video_names = []
+
+    for video_name, label in gt_infos.items():
+        video_root = os.path.join(image_root, video_name, )
+        image_list = os.listdir(video_root)
+
+        temp_list = [os.path.join(video_root, image_list[idx])
+                     for idx in [0, len(image_list) // 2, len(image_list) - 1]]
+        file_paths.append(temp_list)
+        labels.append(label)
+        video_names.append(video_name)
+
+    return file_paths, labels, video_names
+
+
 def default_vid_pre_progress(video_infos, gt_infos, **kwargs):
     vid_infos = {}
     for key, values in video_infos.items():
@@ -329,6 +348,38 @@ def default_remove_noise_in_val(feats, labels, video_names, **kwargs):
     return feats, labels, video_names
 
 
+def default_image_remove_noise_in_val(file_paths, labels, video_names, bboxes, **kwargs):
+    assert len(file_paths) == len(labels)
+    assert len(labels) == len(video_names)
+    assert len(video_names) == len(bboxes)
+
+    idx_list = []
+    for label_idx, label in enumerate(labels):
+        if 'TRAIN' in video_names[label_idx] or (label != 0 and 'VAL' in video_names[label_idx]):
+            idx_list.append(label_idx)
+    file_paths = [file_paths[idx] for idx in idx_list]
+    labels = [labels[idx] for idx in idx_list]
+    video_names = [video_names[idx] for idx in idx_list]
+    bboxes = [bboxes[idx] for idx in idx_list]
+
+    return file_paths, labels, video_names, bboxes
+
+
+def default_scene_remove_noise_in_val(file_paths, labels, video_names, **kwargs):
+    assert len(file_paths) == len(labels)
+    assert len(labels) == len(video_names)
+
+    idx_list = []
+    for label_idx, label in enumerate(labels):
+        if 'TRAIN' in video_names[label_idx] or (label != 0 and 'VAL' in video_names[label_idx]):
+            idx_list.append(label_idx)
+    file_paths = [file_paths[idx] for idx in idx_list]
+    labels = [labels[idx] for idx in idx_list]
+    video_names = [video_names[idx] for idx in idx_list]
+
+    return file_paths, labels, video_names
+
+
 def default_vid_transforms(vid_info, modes, num_frame=15, **kwargs):
     result = []
     for mode in modes:
@@ -415,13 +466,31 @@ def default_identity_transforms(vid_info, modes, num_frame=15, **kwargs):
     return result
 
 
-def default_image_transforms(image_data, bbox, mean_bgr, augm_func, ratio, **kwargs):
+def crop_image(image_data, bbox, ratio):
     bbox = _padding_bbox(bbox, ratio)
     image_data = image_data.crop(bbox)
+    return image_data
+
+
+def _padding_bbox(bbox, ratio=1.):
+    x1, y1, x2, y2 = bbox
+    x_padding = (ratio - 1) * (x2 - x1) / 2
+    y_padding = (ratio - 1) * (y2 - y1) / 2
+    bbox = (x1 - x_padding, y1 - y_padding, x2 + x_padding, y2 + y_padding)
+
+    return bbox
+
+
+def default_image_transforms(image_data, mean_bgr, augm_func, **kwargs):
     image_data = augm_func(image_data)
     image_data = np.array(image_data, dtype=np.uint8)
     image_data = _trans_img(image_data, mean_bgr)
 
+    return image_data
+
+
+def default_scene_transforms(image_data, augm_func, **kwargs):
+    image_data = augm_func(image_data)
     return image_data
 
 
@@ -432,15 +501,6 @@ def _trans_img(img, mean_bgr):
     img = img.transpose(2, 0, 1)  # C x H x W
     img = torch.from_numpy(img).float()
     return img
-
-
-def _padding_bbox(bbox, ratio=1.):
-    x1, y1, x2, y2 = bbox
-    x_padding = (ratio - 1) * (x2 - x1) / 2
-    y_padding = (ratio - 1) * (y2 - y1) / 2
-    bbox = (x1 - x_padding, y1 - y_padding, x2 + x_padding, y2 + y_padding)
-
-    return bbox
 
 
 def default_transforms(feat, **kwargs):
@@ -470,6 +530,12 @@ def default_target_transforms(label, **kwargs):
 
 
 def default_image_target_transforms(label, **kwargs):
+    label_np = np.array(label)
+    label_torch = torch.from_numpy(label_np).long()
+    return label_torch
+
+
+def default_scene_target_transforms(label, **kwargs):
     label_np = np.array(label)
     label_torch = torch.from_numpy(label_np).long()
     return label_torch

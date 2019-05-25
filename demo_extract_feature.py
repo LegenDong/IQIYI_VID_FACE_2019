@@ -24,7 +24,7 @@ def main(data_root, save_dir, tvt, num_classes, batch_size):
 
     save_path = os.path.join(save_dir, 'face_{}_v2.pickle'.format(tvt))
 
-    dataset = IQiYiFaceImageDataset(data_root, tvt=tvt, is_extract=True)
+    dataset = IQiYiFaceImageDataset(data_root, tvt='train+val-noise', is_extract=True)
     data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=4)
     log_step = len(data_loader) // 100 if len(data_loader) > 100 else 1
 

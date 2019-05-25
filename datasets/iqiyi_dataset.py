@@ -7,6 +7,7 @@
 import os
 
 import numpy as np
+import torch
 from PIL import Image
 from torch.utils import data
 from torchvision import transforms
@@ -17,10 +18,12 @@ from utils import load_face_from_pickle, load_train_gt_from_txt, check_exists, d
     default_retain_noise_in_val, default_vid_retain_noise_in_val, default_identity_transforms, \
     default_vid_pre_progress, default_vid_transforms, default_vid_target_transforms, default_vid_remove_noise_in_val, \
     default_remove_noise_in_val, load_head_from_pickle, load_body_from_pickle, default_identity_pre_progress, \
-    default_image_pre_progress, default_image_transforms, default_image_target_transforms
+    default_image_pre_progress, default_image_transforms, default_image_target_transforms, \
+    default_image_remove_noise_in_val, default_scene_pre_progress, default_scene_transforms, \
+    default_scene_target_transforms, default_scene_remove_noise_in_val
 
 __all__ = ['IQiYiVidDataset', 'IQiYiIdentityDataset', 'IQiYiFaceDataset', 'IQiYiHeadDataset', 'IQiYiBodyDataset',
-           'IQiYiFaceImageDataset']
+           'IQiYiFaceImageDataset', 'IQiYiSceneDataset']
 
 FEAT_PATH = 'feat'
 IMAGE_PATH = 'img'
@@ -307,9 +310,9 @@ class IQiYiIdentityDataset(data.Dataset):
 
 class IQiYiFaceImageDataset(data.Dataset):
     def __init__(self, root, tvt='train', is_extract=True, padding_ratio=1.14, transform=None, target_transform=None,
-                 pre_progress=None, **kwargs):
+                 pre_progress=None, image_root=None, **kwargs):
         assert check_exists(root)
-        assert tvt in ['train', 'val', 'train+val', 'train+noise', 'train+val-noise', 'test', ]
+        assert tvt in ['train', 'val', 'train+val', 'train+val-noise', 'test', ]
 
         self.root = os.path.expanduser(root)
         self.tvt = tvt
@@ -319,7 +322,7 @@ class IQiYiFaceImageDataset(data.Dataset):
         self.target_transform = target_transform
         self.pre_progress = pre_progress
         self.kwargs = kwargs
-        self.image_root = os.path.join(self.root, IMAGE_PATH)
+        self.image_root = os.path.join(self.root, IMAGE_PATH) if image_root is None else image_root
 
         if self.is_extract:
             self.augm_func = transforms.Compose([
@@ -354,7 +357,7 @@ class IQiYiFaceImageDataset(data.Dataset):
         elif self.tvt == 'val':
             self.feats_path = os.path.join(self.root, FEAT_PATH, FACE_VAL_NAME)
             self.gt_path = os.path.join(self.root, VAL_GT_NAME)
-        elif self.tvt == 'train+val' or self.tvt == 'train+noise' or self.tvt == 'train+val-noise':
+        elif self.tvt == 'train+val' or self.tvt == 'train+val-noise':
             self.train_feats_path = os.path.join(self.root, FEAT_PATH, FACE_TRAIN_NAME)
             self.val_feats_path = os.path.join(self.root, FEAT_PATH, FACE_VAL_NAME)
             self.train_gt_path = os.path.join(self.root, TRAIN_GT_NAME)
@@ -372,7 +375,7 @@ class IQiYiFaceImageDataset(data.Dataset):
         elif self.tvt == 'val':
             video_infos = load_face_from_pickle(self.feats_path)
             gt_labels = load_val_gt_from_txt(self.gt_path)
-        elif self.tvt == 'train+val' or self.tvt == 'train+noise' or self.tvt == 'train+val-noise':
+        elif self.tvt == 'train+val' or self.tvt == 'train+val-noise':
             video_infos = []
             video_infos += load_face_from_pickle(self.train_feats_path)
             video_infos += load_face_from_pickle(self.val_feats_path)
@@ -386,12 +389,10 @@ class IQiYiFaceImageDataset(data.Dataset):
 
         self.file_paths, self.labels, self.video_names, self.bboxes \
             = self.pre_progress(video_infos, gt_labels, self.image_root, **self.kwargs)
-        # if self.tvt == 'train+noise':
-        #     self.feats, self.labels, self.video_names \
-        #         = default_retain_noise_in_val(self.feats, self.labels, self.video_names, **self.kwargs)
-        # elif self.tvt == 'train+val-noise':
-        #     self.feats, self.labels, self.video_names \
-        #         = default_remove_noise_in_val(self.feats, self.labels, self.video_names, **self.kwargs)
+        if self.tvt == 'train+val-noise':
+            self.file_paths, self.labels, self.video_names, self.bboxes \
+                = default_image_remove_noise_in_val(self.file_paths, self.labels, self.video_names, self.bboxes,
+                                                    **self.kwargs)
         self.length = len(self.file_paths)
 
         assert len(self.file_paths) == len(self.bboxes)
@@ -405,9 +406,105 @@ class IQiYiFaceImageDataset(data.Dataset):
         video_name = self.video_names[index]
 
         image_data = Image.open(image_path).convert('RGB')
-        image_data = self.transform(image_data, bbox, MEAN_BGR_VGGFACE2, self.augm_func, self.padding_ratio)
+        image_data = self.transform(image_data, MEAN_BGR_VGGFACE2, self.augm_func)
         label = self.target_transform(label)
         return image_data, label, video_name
+
+    def __len__(self):
+        return self.length
+
+
+class IQiYiSceneDataset(data.Dataset):
+    def __init__(self, root, tvt='train', is_extract=True, transform=None, target_transform=None, pre_progress=None,
+                 image_root=None, **kwargs):
+        assert check_exists(root)
+        assert tvt in ['train', 'val', 'train+val', 'train+val-noise', 'test', ]
+
+        self.root = os.path.expanduser(root)
+        self.tvt = tvt
+        self.is_extract = is_extract
+        self.transform = transform
+        self.target_transform = target_transform
+        self.pre_progress = pre_progress
+        self.kwargs = kwargs
+        self.image_root = os.path.join(self.root, IMAGE_PATH) if image_root is None else image_root
+
+        if self.is_extract:
+            self.augm_func = transforms.Compose([
+                transforms.Resize((224, 224)),
+                transforms.ToTensor(),
+                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            ])
+        else:
+            self.augm_func = transforms.Compose([
+                transforms.Resize((224, 224)),
+                transforms.RandomHorizontalFlip(p=0.5),
+                transforms.ColorJitter(brightness=0.4, saturation=0.4, hue=0.4),
+                transforms.RandomGrayscale(p=0.2),
+                transforms.ToTensor(),
+                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            ])
+
+        if self.pre_progress is None:
+            self.pre_progress = default_scene_pre_progress
+        else:
+            assert 'scene' in pre_progress.__name__.lower()
+        if self.transform is None:
+            self.transform = default_scene_transforms
+        else:
+            assert 'scene' in transform.__name__.lower()
+        if self.target_transform is None:
+            self.target_transform = default_scene_target_transforms
+        else:
+            assert 'scene' in target_transform.__name__.lower()
+
+        if self.tvt == 'train':
+            self.gt_path = os.path.join(self.root, TRAIN_GT_NAME)
+        elif self.tvt == 'val':
+            self.gt_path = os.path.join(self.root, VAL_GT_NAME)
+        elif self.tvt == 'train+val' or self.tvt == 'train+val-noise':
+            self.train_gt_path = os.path.join(self.root, TRAIN_GT_NAME)
+            self.val_gt_path = os.path.join(self.root, VAL_GT_NAME)
+        elif self.tvt == 'test':
+            self.gt_path = None
+
+        self._init_feat_labels()
+
+    def _init_feat_labels(self):
+        if self.tvt == 'train':
+            gt_labels = load_train_gt_from_txt(self.gt_path)
+        elif self.tvt == 'val':
+            gt_labels = load_val_gt_from_txt(self.gt_path)
+        elif self.tvt == 'train+val' or self.tvt == 'train+val-noise':
+
+            gt_labels = {}
+            gt_labels.update(load_train_gt_from_txt(self.train_gt_path))
+            gt_labels.update(load_val_gt_from_txt(self.val_gt_path))
+        else:
+            gt_labels = {}
+
+        self.file_paths, self.labels, self.video_names \
+            = self.pre_progress(gt_labels, self.image_root, **self.kwargs)
+        if self.tvt == 'train+val-noise':
+            self.file_paths, self.labels, self.video_names \
+                = default_scene_remove_noise_in_val(self.file_paths, self.labels, self.video_names, **self.kwargs)
+        self.length = len(self.file_paths)
+
+        assert len(self.file_paths) == len(self.labels)
+        assert len(self.labels) == len(self.video_names)
+
+    def __getitem__(self, index):
+        image_paths = self.file_paths[index]
+        label = self.labels[index]
+        video_name = self.video_names[index]
+        image_data_list = []
+        for image_path in image_paths:
+            image_data = Image.open(image_path).convert('RGB')
+            image_data = self.transform(image_data, self.augm_func)
+            image_data_list.append(image_data.view(1, *image_data.size()))
+        images_data = torch.cat(image_data_list, dim=0)
+        label = self.target_transform(label)
+        return images_data, label, video_name
 
     def __len__(self):
         return self.length

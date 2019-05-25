@@ -10,12 +10,14 @@ from torch import nn
 from torch.nn import Parameter
 
 from models.layer import MultiModalAttentionLayer, NanAttentionLayer, VLADLayer
+from models.se_resnext import se_resnext50_32x4d
 from .se_resnet import se_resnet50
 
 __all__ = ['BaseModel', 'ArcFaceModel', 'ArcFaceMaxOutModel', 'ArcFaceMultiModalModel', 'ArcFaceNanModel',
-           'ArcFaceVLADModel', 'ArcFaceSimpleModel', 'ArcFaceSEResNetModel']
+           'ArcFaceVLADModel', 'ArcFaceSimpleModel', 'ArcFaceSEResNetModel', 'ArcFaceSEResNeXtModel']
 
 SENET_PATH = './model_zoo/senet50_vggface2.pth'
+SENEXT_PATH = './model_zoo/se_resnext50_32x4d-a260b3a4.pth'
 
 
 class BaseModel(nn.Module):
@@ -285,5 +287,36 @@ class ArcFaceSEResNetModel(nn.Module):
 
         if self.include_top:
             output = F.linear(F.normalize(output), F.normalize(self.weight))
+
+        return output
+
+
+class ArcFaceSEResNeXtModel(nn.Module):
+    def __init__(self, num_classes=1000, ):
+        super(ArcFaceSEResNeXtModel, self).__init__()
+        self.num_classes = num_classes
+        self.model_path = SENEXT_PATH
+
+        self._init_modules()
+
+    def _init_modules(self):
+        se_resnext = se_resnext50_32x4d(num_classes=1000)
+
+        print('loading pre-trained weight for se_resnext from {}.'.format(self.model_path))
+        state_dict = torch.load(self.model_path)
+        se_resnext.load_state_dict({k: v for k, v in state_dict.items() if k in se_resnext.state_dict()})
+
+        self.base_model = nn.Sequential(se_resnext.layer0, se_resnext.layer1,
+                                        se_resnext.layer2, se_resnext.layer3,
+                                        se_resnext.layer4, )
+        self.global_avgpool = nn.AdaptiveAvgPool2d((1, 1))
+        self.fc = nn.Linear(2048, self.num_classes)
+        nn.init.kaiming_normal_(self.fc.weight.data)
+
+    def forward(self, x):
+        output = self.base_model(x)
+        output = self.global_avgpool(output)
+        output = output.view(output.size(0), -1)
+        output = self.fc(output)
 
         return output
