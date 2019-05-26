@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
-# @Time    : 2019-05-10 17:21
-# @Author  : edward
-# @File    : demo_train_nan.py
+# @Time    : 2019/5/26 15:00
+# @Author  : LegenDong
+# @User    : legendong
+# @File    : demo_train_stacking.py
 # @Software: PyCharm
 import argparse
 import os
@@ -12,19 +13,45 @@ import torch
 from torch import optim
 from torch.utils.data import DataLoader
 
-from datasets import IQiYiVidDataset
-from models import ArcFaceNanModel, FocalLoss, ArcMarginProduct
-from utils import check_exists, save_model, sep_cat_qds_vid_transforms, aug_vid_pre_progress
+from datasets import IQiYiVidDataset, IQiYiStackingDataset
+from models import ArcFaceNanModel, FocalLoss, ArcMarginProduct, ArcFaceSubModel
+from utils import check_exists, save_model, sep_cat_qds_vid_transforms
+
+
+def create_train_data(data_loader, sub_model_dir, device):
+    name_feat_dict = {}
+    name_label_dict = {}
+    with torch.no_grad():
+        for sub_model_idx, sub_model_name in enumerate(os.listdir(sub_model_dir)):
+            splits = sub_model_name.split('_')
+            model = ArcFaceSubModel(512 + 2, 10034 + 1, num_attn=int(splits[3]), middle_ratio=int(splits[4]),
+                                    block_num=int(splits[5]), include_top=False)
+            state_dict = torch.load(os.path.join(sub_model_dir, sub_model_name), map_location='cpu')
+            model.load_state_dict(state_dict)
+            model.to(device)
+            model.eval()
+            for batch_idx, (feats, labels, video_names) in enumerate(data_loader):
+                print(batch_idx)
+                feats = feats.to(device)
+                outputs = model(feats)
+                for idx, video_name in enumerate(video_names):
+                    name_feat_dict.setdefault(video_name, []).append(outputs[idx].cpu().view(1, -1))
+                    if sub_model_idx == 0:
+                        name_label_dict[video_name] = labels[idx]
+    return name_feat_dict, name_label_dict
 
 
 def main(args):
     if not check_exists(args.save_dir):
         os.makedirs(args.save_dir)
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    sub_dataset = IQiYiVidDataset(args.data_root, 'train', 'face', transform=sep_cat_qds_vid_transforms,
+                                  num_frame=args.num_frame)
+    sub_data_loader = DataLoader(sub_dataset, batch_size=args.batch_size * 4, shuffle=False, num_workers=4)
 
-    assert args.moda in ['face', 'head']
+    name_feat_dict, name_label_dict = create_train_data(sub_data_loader, './checkpoints/sub_models/', device)
 
-    dataset = IQiYiVidDataset(args.data_root, 'train+val-noise', args.moda, transform=sep_cat_qds_vid_transforms,
-                              pre_progress=aug_vid_pre_progress, num_frame=args.num_frame, aug_num_vid=20)
+    dataset = IQiYiStackingDataset(name_feat_dict, name_label_dict)
     data_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
 
     log_step = len(data_loader) // 10 if len(data_loader) > 10 else 1
@@ -36,7 +63,6 @@ def main(args):
     optimizer = optim.SGD(model.parameters(), lr=args.learning_rate, momentum=0.9, weight_decay=1e-5)
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.epoch)
 
-    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     model = model.to(device)
 
     for epoch_idx in range(args.epoch):
@@ -58,7 +84,7 @@ def main(args):
 
             if batch_idx % log_step == 0 and batch_idx != 0:
                 print('Epoch: {} [{}/{} ({:.0f}%)] Loss: {:.6f}'
-                      .format(epoch_idx, batch_idx * args.batch_size, len(dataset),
+                      .format(epoch_idx, batch_idx * args.batch_size, len(sub_dataset),
                               100.0 * batch_idx / len(data_loader), local_loss.item()))
         log = {'epoch': epoch_idx,
                'lr': optimizer.param_groups[0]['lr'],
@@ -69,7 +95,7 @@ def main(args):
 
         lr_scheduler.step()
 
-    save_model(model, args.save_dir, 'demo_arcface_{}_nan_model'.format(args.moda), args.epoch)
+    save_model(model, args.save_dir, 'demo_arcface_stacking_model', args.epoch)
 
 
 if __name__ == '__main__':
@@ -86,7 +112,6 @@ if __name__ == '__main__':
     parser.add_argument('--learning_rate', type=float, default=0.1, help="learning rate for model (default: 0.1)")
     parser.add_argument('--num_frame', default=40, type=int, help='size of video length (default: 40)')
     parser.add_argument('--num_attn', default=1, type=int, help='number of attention block in NAN')
-    parser.add_argument('--moda', default='face', type=str, help='modal[face, head] of model train, (default: face)')
     args = parser.parse_args()
 
     if args.device:

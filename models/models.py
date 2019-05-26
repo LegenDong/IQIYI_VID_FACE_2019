@@ -9,12 +9,12 @@ import torch.nn.functional as F
 from torch import nn
 from torch.nn import Parameter
 
-from models.layer import MultiModalAttentionLayer, NanAttentionLayer, VLADLayer
+from models.layer import MultiModalAttentionLayer, NanAttentionLayer, VLADLayer, PerceptronLayer
 from models.se_resnext import se_resnext50_32x4d
 from .se_resnet import se_resnet50
 
 __all__ = ['BaseModel', 'ArcFaceModel', 'ArcFaceMaxOutModel', 'ArcFaceMultiModalModel', 'ArcFaceNanModel',
-           'ArcFaceVLADModel', 'ArcFaceSimpleModel', 'ArcFaceSEResNetModel', 'ArcFaceSEResNeXtModel']
+           'ArcFaceVLADModel', 'ArcFaceSimpleModel', 'ArcFaceSEResNetModel', 'ArcFaceSEResNeXtModel', 'ArcFaceSubModel']
 
 SENET_PATH = './model_zoo/senet50_vggface2.pth'
 SENEXT_PATH = './model_zoo/se_resnext50_32x4d-a260b3a4.pth'
@@ -310,13 +310,45 @@ class ArcFaceSEResNeXtModel(nn.Module):
                                         se_resnext.layer2, se_resnext.layer3,
                                         se_resnext.layer4, )
         self.global_avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = nn.Linear(2048, self.num_classes)
-        nn.init.kaiming_normal_(self.fc.weight.data)
+        self.weight = Parameter(torch.FloatTensor(self.num_classes, 2048))
+        nn.init.xavier_uniform_(self.weight)
 
     def forward(self, x):
         output = self.base_model(x)
         output = self.global_avgpool(output)
         output = output.view(output.size(0), -1)
-        output = self.fc(output)
+        output = F.linear(F.normalize(output), F.normalize(self.weight))
+
+        return output
+
+
+class ArcFaceSubModel(nn.Module):
+    def __init__(self, in_features, out_features, num_attn=1, middle_ratio=2., drop_prob=0.5, prelu_init=1,
+                 block_num=1, include_top=True):
+        super(ArcFaceSubModel, self).__init__()
+        self.in_features = in_features
+        self.out_features = out_features
+        self.num_attn = num_attn
+        self.middle_ratio = middle_ratio
+        self.drop_prob = drop_prob
+        self.prelu_init = prelu_init
+        self.block_num = block_num
+        self.include_top = include_top
+
+        perceptron_list = [PerceptronLayer(in_features=self.in_features, middle_ratio=self.middle_ratio,
+                                           drop_prob=self.drop_prob, prelu_init=self.prelu_init)
+                           for _ in range(block_num)]
+
+        self.nan_layer = NanAttentionLayer(self.in_features, self.num_attn)
+        self.perceptron_blocks = nn.Sequential(*perceptron_list)
+
+        self.weight = Parameter(torch.FloatTensor(self.out_features, self.in_features))
+        nn.init.xavier_uniform_(self.weight)
+
+    def forward(self, x):
+        output = self.nan_layer(x)
+        output = self.perceptron_blocks(output)
+        if self.include_top:
+            output = F.linear(F.normalize(output), F.normalize(self.weight))
 
         return output

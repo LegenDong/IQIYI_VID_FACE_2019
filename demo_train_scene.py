@@ -15,7 +15,7 @@ from torch import optim
 from torch.utils.data import DataLoader
 
 from datasets import IQiYiSceneDataset
-from models import FocalLoss, ArcFaceSEResNeXtModel
+from models import FocalLoss, ArcFaceSEResNeXtModel, ArcMarginProduct
 from utils import check_exists, save_model, prepare_device
 
 
@@ -23,21 +23,18 @@ def main(args):
     if not check_exists(args.save_dir):
         os.makedirs(args.save_dir)
 
-    dataset = IQiYiSceneDataset(args.data_root, 'train', is_extract=False)
+    dataset = IQiYiSceneDataset(args.data_root, 'train', is_extract=False, image_root='/home/dcq/img')
     data_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=8)
 
     log_step = len(data_loader) // 10 if len(data_loader) > 10 else 1
 
     model = ArcFaceSEResNeXtModel(args.num_classes, )
-    metric_func = torch.nn.Softmax(-1)
+    metric_func = ArcMarginProduct()
     loss_func = FocalLoss(gamma=2.)
 
-    base_params = filter(lambda p: p.requires_grad, model.base_model.parameters())
-    fc_params = model.fc.parameters()
-
     trainable_params = [
-        {'params': base_params, "lr": args.learning_rate / 100},
-        {'params': fc_params}
+        {'params': model.base_model.parameters(), "lr": args.learning_rate / 100},
+        {'params': model.weight}
     ]
 
     optimizer = optim.SGD(trainable_params, lr=args.learning_rate, momentum=0.9, weight_decay=1e-5)
@@ -60,7 +57,7 @@ def main(args):
             outputs = model(images)
             outputs = outputs.view(outputs.size(0) // 3, 3, -1)
             outputs = torch.mean(outputs, dim=1)
-            outputs_metric = metric_func(outputs)
+            outputs_metric = metric_func(outputs, labels)
             local_loss = loss_func(outputs_metric, labels)
 
             local_loss.backward()
@@ -93,7 +90,7 @@ if __name__ == '__main__':
                         help='path to load data (default: /data/materials/)')
     parser.add_argument('--save_dir', default='./checkpoints/', type=str,
                         help='path to save model (default: ./checkpoints/)')
-    parser.add_argument('--epoch', type=int, default=100, help="the epoch num for train (default: 100)")
+    parser.add_argument('--epoch', type=int, default=30, help="the epoch num for train (default: 30)")
     parser.add_argument('--device', default=None, type=str, help='indices of GPUs to enable (default: all)')
     parser.add_argument('--num_classes', default=10035, type=int, help='number of classes (default: 10035)')
     parser.add_argument('--batch_size', default=40, type=int, help='dim of feature (default: 40)')

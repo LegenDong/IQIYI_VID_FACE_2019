@@ -23,7 +23,7 @@ from utils import load_face_from_pickle, load_train_gt_from_txt, check_exists, d
     default_scene_target_transforms, default_scene_remove_noise_in_val
 
 __all__ = ['IQiYiVidDataset', 'IQiYiIdentityDataset', 'IQiYiFaceDataset', 'IQiYiHeadDataset', 'IQiYiBodyDataset',
-           'IQiYiFaceImageDataset', 'IQiYiSceneDataset']
+           'IQiYiFaceImageDataset', 'IQiYiSceneDataset', 'IQiYiStackingDataset']
 
 FEAT_PATH = 'feat'
 IMAGE_PATH = 'img'
@@ -755,6 +755,30 @@ class IQiYiBodyDataset(data.Dataset):
         label = self.target_transform(label, **self.kwargs)
 
         return feat, label, video_name
+
+    def __len__(self):
+        return self.length
+
+
+class IQiYiStackingDataset(data.Dataset):
+    def __init__(self, name_feat_dict, name_label_dict):
+        assert isinstance(name_feat_dict, dict)
+        assert isinstance(name_label_dict, dict)
+
+        self.video_names = []
+        self.feats = []
+        self.labels = []
+        for video_name, feat in name_feat_dict.items():
+            self.video_names.append(video_name)
+            feat = torch.cat(feat, dim=0)
+            self.feats.append(feat)
+            self.labels.append(name_label_dict[video_name])
+
+        assert len(self.video_names) == len(self.feats)
+        self.length = len(self.video_names)
+
+    def __getitem__(self, index):
+        return self.feats[index], self.labels[index], self.video_names[index]
 
     def __len__(self):
         return self.length

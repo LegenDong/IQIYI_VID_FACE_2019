@@ -23,7 +23,7 @@ def main(args):
     if not check_exists(args.save_dir):
         os.makedirs(args.save_dir)
 
-    dataset = IQiYiFaceImageDataset(args.data_root, 'train', is_extract=False)
+    dataset = IQiYiFaceImageDataset(args.data_root, 'train', is_extract=False, image_root='/home/dcq/img')
     data_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=12)
 
     log_step = len(data_loader) // 100 if len(data_loader) > 100 else 1
@@ -93,7 +93,7 @@ if __name__ == '__main__':
     parser.add_argument('--epoch', type=int, default=100, help="the epoch num for train (default: 100)")
     parser.add_argument('--device', default=None, type=str, help='indices of GPUs to enable (default: all)')
     parser.add_argument('--num_classes', default=10035, type=int, help='number of classes (default: 10035)')
-    parser.add_argument('--batch_size', default=256, type=int, help='dim of feature (default: 256)')
+    parser.add_argument('--batch_size', default=160, type=int, help='dim of feature (default: 256)')
     parser.add_argument('--learning_rate', type=float, default=0.1, help="learning rate for model (default: 0.1)")
     args = parser.parse_args()
 

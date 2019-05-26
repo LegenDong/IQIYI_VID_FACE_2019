@@ -21,7 +21,7 @@ __all__ = ['init_logging', 'check_exists', 'load_train_gt_from_txt', 'load_val_g
            'default_remove_noise_in_val', 'sep_vid_transforms', 'sep_cat_qds_vid_transforms', 'sep_identity_transforms',
            'default_identity_target_transforms', 'default_identity_transforms', 'default_identity_pre_progress',
            'default_image_pre_progress', 'default_image_transforms', 'default_image_target_transforms', 'crop_image',
-           'prepare_device', 'default_image_remove_noise_in_val', 'default_scene_pre_progress',
+           'prepare_device', 'default_image_remove_noise_in_val', 'default_scene_pre_progress', 'aug_vid_pre_progress',
            'default_scene_transforms', 'default_scene_target_transforms', 'default_scene_remove_noise_in_val']
 
 LOG_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
@@ -276,6 +276,62 @@ def default_vid_pre_progress(video_infos, gt_infos, **kwargs):
     return list(vid_infos.values())
 
 
+def aug_vid_pre_progress(video_infos, gt_infos, aug_num_vid=10, aug_num_frame=50, **kwargs):
+    assert aug_num_vid >= 0
+    vid_infos = {}
+    no_frame = []
+    for key, values in video_infos.items():
+        for value in values:
+            frame_infos = value['frame_infos']
+            if len(frame_infos) > 0:
+                vid_infos.setdefault(value['video_name'], {})[key] = frame_infos
+            else:
+                no_frame.append(value['video_name'])
+    to_dels = []
+    for key, value in vid_infos.items():
+        if len(value.keys()) == len(video_infos.keys()):
+            vid_infos[key]['label'] = gt_infos.get(key, 0)
+            vid_infos[key]['video_name'] = key
+        elif len(value.keys()) < len(video_infos.keys()):
+            to_dels.append(key)
+        elif len(value.keys()) > len(video_infos.keys()):
+            logger.error('the vid {} has wrong num of the moda {}'.format(key, ' '.join(value.keys())))
+    for to_del in to_dels:
+        del vid_infos[to_del]
+
+    if aug_num_vid > 0:
+        id_infos = {}
+        for key, value in gt_infos.items():
+            id_infos.setdefault(value, []).append(key)
+
+        count_aug = 1
+        for key, values in id_infos.items():
+            values = list(set(values).difference(set(to_dels)))
+            values = list(set(values).difference(set(no_frame)))
+            num_vid = len(values)
+            if num_vid == 0:
+                continue
+            vids = [vid_infos[value] for value in values]
+            for i in range(aug_num_vid):
+                new_vid = dict()
+                new_vid['label'] = key
+                new_vid['video_name'] = 'IQIYI_VID_AUG_' + str.zfill(str(count_aug), 7)
+                index = [np.random.randint(0, num_vid) for _ in range(aug_num_frame)]
+                choose_vids = [vids[i] for i in index]
+
+                for moda in video_infos.keys():
+                    feat_moda = []
+                    for vid in choose_vids:
+                        choose_frame = np.random.choice(vid[moda], 1)
+                        feat_moda += list(choose_frame)
+                    assert len(feat_moda) == aug_num_frame
+                    new_vid[moda] = feat_moda
+
+                vid_infos[new_vid['video_name']] = new_vid
+                count_aug += 1
+    return list(vid_infos.values())
+
+
 def default_identity_pre_progress(video_infos, gt_infos, pr=1., **kwargs):
     vid_infos = {}
     for key, values in video_infos.items():
@@ -311,7 +367,9 @@ def default_vid_retain_noise_in_val(vid_infos, pr=0.5, **kwargs):
 def default_vid_remove_noise_in_val(vid_infos, **kwargs):
     idx_list = []
     for idx, vid_info in enumerate(vid_infos):
-        if ('TRAIN' in vid_info['video_name']) or (vid_info['label'] != 0 and 'VAL' in vid_info['video_name']):
+        if ('TRAIN' in vid_info['video_name']) \
+                or (vid_info['label'] != 0 and 'VAL' in vid_info['video_name']) \
+                or (vid_info['label'] != 0 and 'AUG' in vid_info['video_name']):
             idx_list.append(idx)
     return [vid_infos[idx] for idx in idx_list]
 
