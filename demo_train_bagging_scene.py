@@ -150,6 +150,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_classes', default=10035, type=int, help='number of classes (default: 10035)')
     parser.add_argument('--batch_size', default=40, type=int, help='dim of feature (default: 40)')
     parser.add_argument('--learning_rate', type=float, default=0.1, help="learning rate for model (default: 0.1)")
+    parser.add_argument('--save_interval', type=int, default=5, help='save interval in train model (default: 5)')
 
     args = parser.parse_args()
 

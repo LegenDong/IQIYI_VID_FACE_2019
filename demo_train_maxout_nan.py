@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
-# @Time    : 2019-05-10 17:21
-# @Author  : edward
-# @File    : demo_train_nan.py
+# @Time    : 2019/5/26 23:54
+# @Author  : LegenDong
+# @User    : legendong
+# @File    : demo_train_maxout.py
 # @Software: PyCharm
 import argparse
 import os
@@ -13,8 +14,8 @@ from torch import optim
 from torch.utils.data import DataLoader
 
 from datasets import IQiYiVidDataset
-from models import ArcFaceNanModel, FocalLoss, ArcMarginProduct
-from utils import check_exists, save_model, sep_cat_qds_vid_transforms, aug_vid_pre_progress
+from models import FocalLoss, ArcMarginProduct, ArcFaceNanMaxOutModel
+from utils import check_exists, save_model, sep_cat_qds_vid_transforms
 
 
 def main(args):
@@ -23,13 +24,13 @@ def main(args):
 
     assert args.moda in ['face', 'head']
 
-    dataset = IQiYiVidDataset(args.data_root, 'train+val-noise', args.moda, transform=sep_cat_qds_vid_transforms,
-                              pre_progress=aug_vid_pre_progress, num_frame=args.num_frame, )
+    dataset = IQiYiVidDataset(args.data_root, 'train+noise', args.moda, transform=sep_cat_qds_vid_transforms,
+                              num_frame=args.num_frame)
     data_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
 
     log_step = len(data_loader) // 10 if len(data_loader) > 10 else 1
 
-    model = ArcFaceNanModel(args.feat_dim, args.num_classes, num_attn=args.num_attn)
+    model = ArcFaceNanMaxOutModel(args.feat_dim, args.num_classes, stuff_labels=args.stuff_labels)
     metric_func = ArcMarginProduct()
     loss_func = FocalLoss(gamma=2.)
 
@@ -69,7 +70,8 @@ def main(args):
 
         lr_scheduler.step()
 
-    save_model(model, args.save_dir, 'demo_arcface_{}_nan_model'.format(args.moda), args.epoch)
+    save_model(model, args.save_dir, 'demo_arcface_{}_{}_nan_maxout_model'.format(args.moda, args.stuff_labels),
+               args.epoch)
 
 
 if __name__ == '__main__':
@@ -86,7 +88,8 @@ if __name__ == '__main__':
     parser.add_argument('--learning_rate', type=float, default=0.1, help="learning rate for model (default: 0.1)")
     parser.add_argument('--num_frame', default=40, type=int, help='size of video length (default: 40)')
     parser.add_argument('--num_attn', default=1, type=int, help='number of attention block in NAN')
-    parser.add_argument('--moda', default='face', type=str, help='modal[face, head] of model train, (default: face)')
+    parser.add_argument('--moda', default='face', type=str, help='modal[face, head] of model train (default: face)')
+    parser.add_argument('--stuff_labels', default=1000, type=int, help='stuff num for maxout model (default: 1000)')
     args = parser.parse_args()
 
     if args.device:
