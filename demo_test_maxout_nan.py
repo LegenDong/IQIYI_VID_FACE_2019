@@ -14,7 +14,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from datasets import IQiYiVidDataset
-from models import ArcFaceNanModel
+from models import ArcFaceNanMaxOutModel
 from utils import check_exists, init_logging, sep_cat_qds_vid_transforms
 
 logger = logging.getLogger(__name__)
@@ -27,7 +27,7 @@ def main(data_root, num_frame, num_attn, moda, stuff_labels, epoch):
     dataset = IQiYiVidDataset(data_root, 'test', moda, transform=sep_cat_qds_vid_transforms, num_frame=num_frame)
     data_loader = DataLoader(dataset, batch_size=2048, shuffle=False, num_workers=0)
 
-    model = ArcFaceNanModel(512 + 2, 10034 + 1, num_attn=num_attn)
+    model = ArcFaceNanMaxOutModel(512 + 2, 10034 + 1, num_attn=num_attn, stuff_labels=stuff_labels)
     metric_func = torch.nn.Softmax(-1)
 
     logger.info('load model from {}'.format(load_path))

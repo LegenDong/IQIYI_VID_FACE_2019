@@ -356,11 +356,12 @@ class ArcFaceSubModel(nn.Module):
 
 
 class ArcFaceNanMaxOutModel(nn.Module):
-    def __init__(self, in_features, out_features, stuff_labels):
+    def __init__(self, in_features, out_features, num_attn, stuff_labels):
         super(ArcFaceNanMaxOutModel, self).__init__()
         self.in_features = in_features
         self.out_features = out_features
 
+        self.num_attn = num_attn
         self.object_classes = out_features - 1
         self.stuff_labels = stuff_labels
 

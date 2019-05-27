@@ -30,7 +30,8 @@ def main(args):
 
     log_step = len(data_loader) // 10 if len(data_loader) > 10 else 1
 
-    model = ArcFaceNanMaxOutModel(args.feat_dim, args.num_classes, stuff_labels=args.stuff_labels)
+    model = ArcFaceNanMaxOutModel(args.feat_dim, args.num_classes, num_attn=args.num_attn,
+                                  stuff_labels=args.stuff_labels)
     metric_func = ArcMarginProduct()
     loss_func = FocalLoss(gamma=2.)
 
