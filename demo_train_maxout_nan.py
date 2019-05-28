@@ -24,7 +24,7 @@ def main(args):
 
     assert args.moda in ['face', 'head']
 
-    dataset = IQiYiVidDataset(args.data_root, 'train+noise', args.moda, transform=sep_cat_qds_vid_transforms,
+    dataset = IQiYiVidDataset(args.data_root, 'train+val', args.moda, transform=sep_cat_qds_vid_transforms,
                               num_frame=args.num_frame)
     data_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
 
@@ -71,7 +71,7 @@ def main(args):
 
         lr_scheduler.step()
 
-    save_model(model, args.save_dir, 'demo_arcface_{}_{}_nan_maxout_model'.format(args.moda, args.stuff_labels),
+    save_model(model, args.save_dir, 'demo_arcface_{}_{:0>6d}_nan_maxout_model'.format(args.moda, args.stuff_labels),
                args.epoch)
 
 
@@ -79,8 +79,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='PyTorch Template')
     parser.add_argument('--data_root', default='/data/materials', type=str,
                         help='path to load data (default: /data/materials/)')
-    parser.add_argument('--save_dir', default='./checkpoints/', type=str,
-                        help='path to save model (default: ./checkpoints/)')
+    parser.add_argument('--save_dir', default='./checkpoints/sub_models/', type=str,
+                        help='path to save model (default: ./checkpoints/sub_models/)')
     parser.add_argument('--epoch', type=int, default=100, help="the epoch num for train (default: 100)")
     parser.add_argument('--device', default=None, type=str, help='indices of GPUs to enable (default: all)')
     parser.add_argument('--num_classes', default=10035, type=int, help='number of classes (default: 10035)')

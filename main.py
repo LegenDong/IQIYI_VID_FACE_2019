@@ -12,6 +12,7 @@ import time
 import numpy as np
 import torch
 
+import demo_test_mean_maxout_nan
 import demo_test_nan
 from utils import check_exists, init_logging
 
@@ -19,7 +20,9 @@ logger = logging.getLogger(__name__)
 
 
 def main(data_root):
-    all_outputs_1, all_video_names_1 = demo_test_nan.main(data_root, 40, 1, 'face', 100)
+    all_outputs_1, all_video_names_1 = \
+        demo_test_mean_maxout_nan.main(data_root, 40, 1, 'face',
+                                       (10000, 11000, 12000, 13000, 14000, 15000, 16000, 17000, 18000, 19000), 100)
     all_outputs_2, all_video_names_2 = demo_test_nan.main(data_root, 40, 1, 'head', 200)
 
     new_all_outputs = []

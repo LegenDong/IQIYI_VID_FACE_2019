@@ -20,27 +20,30 @@ from utils import check_exists, init_logging, sep_cat_qds_vid_transforms
 logger = logging.getLogger(__name__)
 
 
-def main(data_root, num_frame, num_attn, moda, stuff_labels, epoch):
-    load_path = './checkpoints/sub_models/demo_arcface_{}_{:0>6d}_nan_maxout_model_{:0>4d}.pth' \
-        .format(moda, stuff_labels, epoch)
-    assert check_exists(load_path)
+def main(data_root, num_frame, num_attn, moda, stuff_labels_list, epoch):
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    logger.info('test model on {}'.format(device))
+
+    model_list = []
+    for stuff_labels in stuff_labels_list:
+        load_path = './checkpoints/sub_models/demo_arcface_{}_{:0>6d}_nan_maxout_model_{:0>4d}.pth' \
+            .format(moda, stuff_labels, epoch)
+        assert check_exists(load_path)
+
+        model = ArcFaceNanMaxOutModel(512 + 2, 10034 + 1, num_attn=num_attn, stuff_labels=stuff_labels)
+        logger.info('load model from {}'.format(load_path))
+        state_dict = torch.load(load_path, map_location='cpu')
+
+        model.load_state_dict(state_dict)
+        model = model.to(device)
+        model.eval()
+
+        model_list.append(model)
 
     dataset = IQiYiVidDataset(data_root, 'test', moda, transform=sep_cat_qds_vid_transforms, num_frame=num_frame)
     data_loader = DataLoader(dataset, batch_size=2048, shuffle=False, num_workers=0)
 
-    model = ArcFaceNanMaxOutModel(512 + 2, 10034 + 1, num_attn=num_attn, stuff_labels=stuff_labels)
     metric_func = torch.nn.Softmax(-1)
-
-    logger.info('load model from {}'.format(load_path))
-    state_dict = torch.load(load_path, map_location='cpu')
-    model.load_state_dict(state_dict)
-
-    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-    model = model.to(device)
-
-    logger.info('test model on {}'.format(device))
-
-    model.eval()
 
     all_outputs = []
     all_video_names = []
@@ -49,9 +52,12 @@ def main(data_root, num_frame, num_attn, moda, stuff_labels, epoch):
             logger.info('Test Model: {}/{}'.format(batch_idx, len(data_loader)))
 
             feats = feats.to(device)
-            output = model(feats)
-            output = metric_func(output)
-            all_outputs.append(output.cpu())
+            output = 0.
+            for model in model_list:
+                temp_output = model(feats)
+                temp_output = metric_func(temp_output).cpu()
+                output += temp_output
+            all_outputs.append(output / len(model_list))
             all_video_names += video_names
 
     all_outputs = torch.cat(all_outputs, dim=0)
@@ -71,7 +77,6 @@ if __name__ == '__main__':
     parser.add_argument('--num_attn', default=1, type=int, help='number of attention block in NAN')
     parser.add_argument('--moda', default='face', type=str, help='modal[face, head] of model train, (default: face)')
     parser.add_argument('--epoch', type=int, default=100, help="the epoch num for train (default: 100)")
-    parser.add_argument('--stuff_labels', default=40000, type=int, help='stuff num for maxout model (default: 1000)')
 
     args = parser.parse_args()
 
@@ -100,7 +105,8 @@ if __name__ == '__main__':
 
     init_logging(log_path)
 
-    all_outputs, all_video_names = main(args.data_root, args.num_frame, args.num_attn, args.moda, args.stuff_labels,
+    all_outputs, all_video_names = main(args.data_root, args.num_frame, args.num_attn, args.moda,
+                                        (10000, 11000, 12000, 13000, 14000, 15000, 16000, 17000, 18000, 19000),
                                         args.epoch)
 
     top100_value, top100_idxes = torch.topk(all_outputs, 100, dim=0)
