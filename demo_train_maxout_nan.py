@@ -15,7 +15,7 @@ from torch.utils.data import DataLoader
 
 from datasets import IQiYiVidDataset
 from models import FocalLoss, ArcMarginProduct, ArcFaceNanMaxOutModel
-from utils import check_exists, save_model, sep_cat_qds_vid_transforms
+from utils import check_exists, save_model, sep_cat_qds_vid_transforms, aug_vid_pre_progress
 
 
 def main(args):
@@ -24,8 +24,8 @@ def main(args):
 
     assert args.moda in ['face', 'head']
 
-    dataset = IQiYiVidDataset(args.data_root, 'train+val', args.moda, transform=sep_cat_qds_vid_transforms,
-                              num_frame=args.num_frame)
+    dataset = IQiYiVidDataset(args.data_root, 'train+noise', args.moda, transform=sep_cat_qds_vid_transforms,
+                              num_frame=args.num_frame, pre_progress=aug_vid_pre_progress, )
     data_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
 
     log_step = len(data_loader) // 10 if len(data_loader) > 10 else 1
@@ -79,7 +79,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='PyTorch Template')
     parser.add_argument('--data_root', default='/data/materials', type=str,
                         help='path to load data (default: /data/materials/)')
-    parser.add_argument('--save_dir', default='./checkpoints/sub_models/', type=str,
+    parser.add_argument('--save_dir', default='./checkpoints/', type=str,
                         help='path to save model (default: ./checkpoints/sub_models/)')
     parser.add_argument('--epoch', type=int, default=100, help="the epoch num for train (default: 100)")
     parser.add_argument('--device', default=None, type=str, help='indices of GPUs to enable (default: all)')

@@ -14,20 +14,21 @@ from torch import optim
 from torch.utils.data import DataLoader
 
 from datasets import IQiYiVidDataset
-from models import FocalLoss, ArcMarginProduct, ArcFaceMultiModalModel
-from utils import check_exists, save_model
+from models import FocalLoss, ArcMarginProduct, ArcFaceMultiModalNanModel
+from utils import check_exists, save_model, sep_cat_qds_vid_transforms
 
 
 def main(args):
     if not check_exists(args.save_dir):
         os.makedirs(args.save_dir)
 
-    dataset = IQiYiVidDataset(args.data_root, 'train+val-noise', modes='face+head')
+    dataset = IQiYiVidDataset(args.data_root, 'train', modes='face+head', transform=sep_cat_qds_vid_transforms,
+                              num_frame=40)
     data_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
 
     log_step = len(data_loader) // 10 if len(data_loader) > 10 else 1
 
-    model = ArcFaceMultiModalModel(args.feat_dim, args.num_classes)
+    model = ArcFaceMultiModalNanModel(args.feat_dim, args.num_classes)
     metric_func = ArcMarginProduct()
     loss_func = FocalLoss()
 
@@ -82,7 +83,7 @@ if __name__ == '__main__':
     parser.add_argument('--device', default=None, type=str, help='indices of GPUs to enable (default: all)')
     parser.add_argument('--num_classes', default=10035, type=int, help='number of classes (default: 10035)')
     parser.add_argument('--batch_size', default=4096, type=int, help='dim of feature (default: 4096)')
-    parser.add_argument('--feat_dim', default=512, type=int, help='dim of feature (default: 512)')
+    parser.add_argument('--feat_dim', default=514, type=int, help='dim of feature (default: 514)')
     parser.add_argument('--learning_rate', type=float, default=0.1, help="learning rate for model (default: 0.1)")
 
     args = parser.parse_args()

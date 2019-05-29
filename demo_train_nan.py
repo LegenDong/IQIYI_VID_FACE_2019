@@ -23,7 +23,7 @@ def main(args):
 
     assert args.moda in ['face', 'head']
 
-    dataset = IQiYiVidDataset(args.data_root, 'train+val-noise', args.moda, transform=sep_cat_qds_vid_transforms,
+    dataset = IQiYiVidDataset(args.data_root, 'train', args.moda, transform=sep_cat_qds_vid_transforms,
                               pre_progress=aug_vid_pre_progress, num_frame=args.num_frame, )
     data_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
 

@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 def main(data_root, num_frame, num_attn, moda, stuff_labels, epoch):
-    load_path = './checkpoints/sub_models/demo_arcface_{}_{:0>6d}_nan_maxout_model_{:0>4d}.pth' \
+    load_path = './checkpoints/demo_arcface_{}_{:0>6d}_nan_maxout_model_{:0>4d}.pth' \
         .format(moda, stuff_labels, epoch)
     assert check_exists(load_path)
 
@@ -71,7 +71,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_attn', default=1, type=int, help='number of attention block in NAN')
     parser.add_argument('--moda', default='face', type=str, help='modal[face, head] of model train, (default: face)')
     parser.add_argument('--epoch', type=int, default=100, help="the epoch num for train (default: 100)")
-    parser.add_argument('--stuff_labels', default=40000, type=int, help='stuff num for maxout model (default: 1000)')
+    parser.add_argument('--stuff_labels', default=1000, type=int, help='stuff num for maxout model (default: 1000)')
 
     args = parser.parse_args()
 

@@ -358,7 +358,7 @@ def default_identity_pre_progress(video_infos, gt_infos, pr=1., **kwargs):
 def default_vid_retain_noise_in_val(vid_infos, pr=0.5, **kwargs):
     idx_list = []
     for idx, vid_info in enumerate(vid_infos):
-        if ('TRAIN' in vid_info['video_name']) or \
+        if ('TRAIN' in vid_info['video_name'] or 'AUG' in vid_info['video_name']) or \
                 (vid_info['label'] == 0 and 'VAL' in vid_info['video_name'] and random.uniform(0, 1) < pr):
             idx_list.append(idx)
     return [vid_infos[idx] for idx in idx_list]
@@ -683,7 +683,7 @@ def load_head_from_pickle(file_path):
             assert (0 <= x1 <= x2)
             assert (0 <= y1 <= y2)
             assert (type(det_score) == float)
-            assert (feat.dtype == np.float16 and feat.shape[0] == 512)
+            assert (feat.dtype == np.float16 and (feat.shape[0] == 512 or feat.shape[0] == 2048))
 
             frame_infos.append({'frame_id': last_fame_num,
                                 'bbox': bbox,

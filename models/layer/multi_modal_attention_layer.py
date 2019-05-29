@@ -13,8 +13,7 @@ __all__ = ['MultiModalAttentionLayer']
 
 
 def conv1x1(in_planes, out_planes, stride=1):
-    return nn.Conv1d(in_planes, out_planes, kernel_size=1, stride=stride, padding=0,
-                     bias=False)
+    return nn.Conv1d(in_planes, out_planes, kernel_size=1, stride=stride, padding=0, bias=False)
 
 
 class MultiModalAttentionLayer(nn.Module):
@@ -45,9 +44,18 @@ class MultiModalAttentionLayer(nn.Module):
                 nn.BatchNorm1d(self.planes)
             )
             nn.init.constant_(self.W_theta[0].weight, .0)
+
+            self.W_phi = nn.Sequential(
+                conv1x1(self.inplanes, self.planes),
+                nn.BatchNorm1d(self.planes)
+            )
+            nn.init.constant_(self.W_phi[0].weight, .0)
         else:
             self.W_theta = conv1x1(self.inplanes, self.planes)
             nn.init.constant_(self.W_theta.weight, .0)
+
+            self.W_phi = conv1x1(self.inplanes, self.planes)
+            nn.init.constant_(self.W_phi.weight, .0)
 
     def forward(self, x):
         # print(x.size())
@@ -61,7 +69,7 @@ class MultiModalAttentionLayer(nn.Module):
         # print(theta_x.size())
 
         # phi_x -> (b, c, l) -> (b, 0.5c, l) -> (b, l, 0.5c)
-        phi_x = self.W_theta(x)
+        phi_x = self.W_phi(x)
         phi_x = phi_x.permute(0, 2, 1)
         # print(phi_x.size())
 
