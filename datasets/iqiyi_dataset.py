@@ -20,10 +20,11 @@ from utils import load_face_from_pickle, load_train_gt_from_txt, check_exists, d
     default_remove_noise_in_val, load_head_from_pickle, load_body_from_pickle, default_identity_pre_progress, \
     default_image_pre_progress, default_image_transforms, default_image_target_transforms, \
     default_image_remove_noise_in_val, default_scene_pre_progress, default_scene_transforms, \
-    default_scene_target_transforms, default_scene_remove_noise_in_val, crop_image
+    default_scene_target_transforms, crop_image, load_scene_infos, default_scene_feat_pre_progress, \
+    default_scene_feat_remove_noise, default_sep_scene_feat_transforms, default_scene_feat_target_transforms
 
 __all__ = ['IQiYiVidDataset', 'IQiYiIdentityDataset', 'IQiYiFaceDataset', 'IQiYiHeadDataset', 'IQiYiBodyDataset',
-           'IQiYiFaceImageDataset', 'IQiYiSceneDataset', 'IQiYiStackingDataset']
+           'IQiYiFaceImageDataset', 'IQiYiExtractSceneDataset', 'IQiYiStackingDataset']
 
 FEAT_PATH = 'feat'
 IMAGE_PATH = 'img'
@@ -39,6 +40,10 @@ HEAD_TEST_NAME = 'head_test.pickle'
 BODY_TRAIN_NAME = 'body_train.pickle'
 BODY_VAL_NAME = 'body_val.pickle'
 BODY_TEST_NAME = 'body_test.pickle'
+
+SCENE_TRAIN_NAME = 'scene_infos_train.pickle'
+SCENE_VAL_NAME = 'scene_infos_val.pickle'
+SCENE_TEST_NAME = 'scene_infos_test.pickle'
 
 TRAIN_GT_NAME = 'train_gt.txt'
 VAL_GT_NAME = 'val_gt.txt'
@@ -418,36 +423,27 @@ class IQiYiFaceImageDataset(data.Dataset):
         return self.length
 
 
-class IQiYiSceneDataset(data.Dataset):
-    def __init__(self, root, tvt='train', is_extract=True, transform=None, target_transform=None, pre_progress=None,
-                 image_root=None, **kwargs):
+class IQiYiExtractSceneDataset(data.Dataset):
+    def __init__(self, root, tvt='train', transform=None, target_transform=None, pre_progress=None, image_root=None,
+                 **kwargs):
         assert check_exists(root)
-        assert tvt in ['train', 'val', 'train+val', 'train+val-noise', 'test', ]
+        assert tvt in ['train', 'val', 'test', ]
 
         self.root = os.path.expanduser(root)
         self.tvt = tvt
-        self.is_extract = is_extract
         self.transform = transform
         self.target_transform = target_transform
         self.pre_progress = pre_progress
         self.kwargs = kwargs
-        self.image_root = os.path.join(self.root, IMAGE_PATH) if image_root is None else image_root
+        self.image_root = os.path.join(self.root, IMAGE_PATH) \
+            if (image_root is None or not check_exists(image_root)) else image_root
 
-        if self.is_extract:
-            self.augm_func = transforms.Compose([
-                transforms.Resize((224, 224)),
-                transforms.ToTensor(),
-                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-            ])
-        else:
-            self.augm_func = transforms.Compose([
-                transforms.Resize((224, 224)),
-                transforms.RandomHorizontalFlip(p=0.5),
-                transforms.ColorJitter(brightness=0.4, saturation=0.4, hue=0.4),
-                transforms.RandomGrayscale(p=0.2),
-                transforms.ToTensor(),
-                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-            ])
+        # get the code from https://github.com/CSAILVision/places365/blob/master/run_placesCNN_unified.py
+        self.augm_func = transforms.Compose([
+            transforms.Resize((224, 224)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ])
 
         if self.pre_progress is None:
             self.pre_progress = default_scene_pre_progress
@@ -462,53 +458,24 @@ class IQiYiSceneDataset(data.Dataset):
         else:
             assert 'scene' in target_transform.__name__.lower()
 
-        if self.tvt == 'train':
-            self.gt_path = os.path.join(self.root, TRAIN_GT_NAME)
-        elif self.tvt == 'val':
-            self.gt_path = os.path.join(self.root, VAL_GT_NAME)
-        elif self.tvt == 'train+val' or self.tvt == 'train+val-noise':
-            self.train_gt_path = os.path.join(self.root, TRAIN_GT_NAME)
-            self.val_gt_path = os.path.join(self.root, VAL_GT_NAME)
-        elif self.tvt == 'test':
-            self.gt_path = None
-
         self._init_feat_labels()
 
     def _init_feat_labels(self):
-        if self.tvt == 'train':
-            gt_labels = load_train_gt_from_txt(self.gt_path)
-        elif self.tvt == 'val':
-            gt_labels = load_val_gt_from_txt(self.gt_path)
-        elif self.tvt == 'train+val' or self.tvt == 'train+val-noise':
+        self.image_paths, self.video_names, self.image_indexes \
+            = self.pre_progress(self.tvt, self.image_root, **self.kwargs)
+        self.length = len(self.image_paths)
+        print(self.length)
 
-            gt_labels = {}
-            gt_labels.update(load_train_gt_from_txt(self.train_gt_path))
-            gt_labels.update(load_val_gt_from_txt(self.val_gt_path))
-        else:
-            gt_labels = {}
-
-        self.file_paths, self.labels, self.video_names \
-            = self.pre_progress(gt_labels, self.image_root, **self.kwargs)
-        if self.tvt == 'train+val-noise':
-            self.file_paths, self.labels, self.video_names \
-                = default_scene_remove_noise_in_val(self.file_paths, self.labels, self.video_names, **self.kwargs)
-        self.length = len(self.file_paths)
-
-        assert len(self.file_paths) == len(self.labels)
-        assert len(self.labels) == len(self.video_names)
+        assert len(self.image_paths) == len(self.video_names)
+        assert len(self.video_names) == len(self.image_indexes)
 
     def __getitem__(self, index):
-        image_paths = self.file_paths[index]
-        label = self.labels[index]
+        image_path = self.image_paths[index]
         video_name = self.video_names[index]
-        image_data_list = []
-        for image_path in image_paths:
-            image_data = Image.open(image_path).convert('RGB')
-            image_data = self.transform(image_data, self.augm_func)
-            image_data_list.append(image_data.view(1, *image_data.size()))
-        images_data = torch.cat(image_data_list, dim=0)
-        label = self.target_transform(label)
-        return images_data, label, video_name
+        image_index = self.image_indexes[index]
+        image_data = Image.open(image_path).convert('RGB')
+        image_data = self.transform(image_data, self.augm_func)
+        return image_data, video_name, image_index
 
     def __len__(self):
         return self.length
@@ -787,118 +754,88 @@ class IQiYiStackingDataset(data.Dataset):
     def __len__(self):
         return self.length
 
-# class IQiYiCatVidFaceDataset(data.Dataset):
-#     def __init__(self, data_root_1, data_root_2, tvt='train', transform=None, target_transform=None, pre_progress=None,
-#                  **kwargs):
-#
-#         assert check_exists([data_root_1, data_root_2])
-#         assert tvt in ['train', 'val', 'train+val', 'train+noise', 'train+val-noise', 'test', ]
-#
-#         self.data_root_1 = os.path.expanduser(data_root_1)
-#         self.data_root_2 = os.path.expanduser(data_root_2)
-#         self.tvt = tvt
-#         self.transform = transform
-#         self.target_transform = target_transform
-#         self.pre_progress = pre_progress
-#         self.kwargs = kwargs
-#
-#         if self.pre_progress is None:
-#             self.pre_progress = default_vid_pre_progress
-#         else:
-#             assert 'vid' in pre_progress.__name__.lower()
-#         if self.transform is None:
-#             self.transform = default_vid_transforms
-#         else:
-#             assert 'vid' in transform.__name__.lower()
-#         if self.target_transform is None:
-#             self.target_transform = default_vid_target_transforms
-#         else:
-#             assert 'vid' in target_transform.__name__.lower()
-#
-#         if self.tvt == 'train':
-#             self.feats_paths = {}
-#             self.feats_paths= [os.path.join(self.root, FEAT_PATH, gen_file_name(mode, 'train'))]
-#             self.gt_path = os.path.join(self.data_root_1, TRAIN_GT_NAME)
-#         elif self.tvt == 'val':
-#             self.feats_paths = {}
-#             for mode in modes:
-#                 self.feats_paths[mode] = os.path.join(self.root, FEAT_PATH, gen_file_name(mode, 'val'))
-#             self.gt_path = os.path.join(self.root, VAL_GT_NAME)
-#         elif self.tvt == 'train+val' or self.tvt == 'train+noise' or self.tvt == 'train+val-noise':
-#             self.train_feats_paths = {}
-#             self.val_feats_paths = {}
-#             for mode in modes:
-#                 self.train_feats_paths[mode] = os.path.join(self.root, FEAT_PATH, gen_file_name(mode, 'train'))
-#                 self.val_feats_paths[mode] = os.path.join(self.root, FEAT_PATH, gen_file_name(mode, 'val'))
-#             self.train_gt_path = os.path.join(self.root, TRAIN_GT_NAME)
-#             self.val_gt_path = os.path.join(self.root, VAL_GT_NAME)
-#         elif self.tvt == 'test':
-#             self.feats_paths = {}
-#             for mode in modes:
-#                 self.feats_paths[mode] = os.path.join(self.root, FEAT_PATH, gen_file_name(mode, 'test'))
-#             self.gt_path = None
-#
-#         self._init_feat_labels()
-#
-#     def _init_feat_labels(self):
-#         if self.tvt == 'train':
-#             video_infos = {}
-#             for key, value in self.feats_paths.items():
-#                 assert hasattr(module, TEMPLATE_LOAD_PICKLE.format(key))
-#                 load_func = getattr(module, TEMPLATE_LOAD_PICKLE.format(key))
-#                 video_infos[key] = load_func(value)
-#             gt_labels = load_train_gt_from_txt(self.gt_path)
-#         elif self.tvt == 'val':
-#             video_infos = {}
-#             for key, value in self.feats_paths.items():
-#                 assert hasattr(module, TEMPLATE_LOAD_PICKLE.format(key))
-#                 load_func = getattr(module, TEMPLATE_LOAD_PICKLE.format(key))
-#                 video_infos[key] = load_func(value)
-#             gt_labels = load_val_gt_from_txt(self.gt_path)
-#         elif self.tvt == 'train+val' or self.tvt == 'train+noise' or self.tvt == 'train+val-noise':
-#             video_infos = {}
-#             for key, value in self.train_feats_paths.items():
-#                 assert hasattr(module, TEMPLATE_LOAD_PICKLE.format(key))
-#                 load_func = getattr(module, TEMPLATE_LOAD_PICKLE.format(key))
-#                 video_infos[key] = []
-#                 video_infos[key] += load_func(value)
-#                 video_infos[key] += load_func(self.val_feats_paths[key])
-#
-#             gt_labels = {}
-#             gt_labels.update(load_train_gt_from_txt(self.train_gt_path))
-#             gt_labels.update(load_val_gt_from_txt(self.val_gt_path))
-#         else:
-#             video_infos = {}
-#             for key, value in self.feats_paths.items():
-#                 assert hasattr(module, TEMPLATE_LOAD_PICKLE.format(key))
-#                 load_func = getattr(module, TEMPLATE_LOAD_PICKLE.format(key))
-#                 video_infos[key] = load_func(value)
-#             gt_labels = {}
-#
-#         self.vid_infos = self.pre_progress(video_infos, gt_labels, only_train=(self.tvt == 'train+noise'),
-#                                            **self.kwargs)
-#         if self.tvt == 'train+noise':
-#             self.vid_infos = default_vid_retain_noise_in_val(self.vid_infos, **self.kwargs)
-#         elif self.tvt == 'train+val-noise':
-#             self.vid_infos = default_vid_remove_noise_in_val(self.vid_infos, **self.kwargs)
-#
-#         self.length = len(self.vid_infos)
-#
-#     def __getitem__(self, index):
-#         vid_info = self.vid_infos[index]
-#
-#         label = self.target_transform(vid_info, **self.kwargs)
-#         vid_name = vid_info['video_name']
-#
-#         if len(self.modes) == 1:
-#             feat, = self.transform(vid_info, self.modes, **self.kwargs)
-#             return feat, label, vid_name
-#         elif len(self.modes) == 2:
-#             feat_1, feat_2 = self.transform(vid_info, self.modes, **self.kwargs)
-#             return feat_1, feat_2, label, vid_name
-#         elif len(self.modes) == 3:
-#             feat_1, feat_2, feat_3 = self.transform(vid_info, self.modes, **self.kwargs)
-#             return feat_1, feat_2, feat_3, label, vid_name
-#
-#     def __len__(self):
-#         return self.length
+
+class IQiYiSceneFeatDataset(data.Dataset):
+    def __init__(self, root, tvt='train', transform=None, target_transform=None, pre_progress=None, **kwargs):
+        assert check_exists(root)
+        assert tvt in ['train', 'val', 'train+val', 'train+val-noise', 'test', ]
+
+        self.root = os.path.expanduser(root)
+        self.tvt = tvt
+        self.transform = transform
+        self.target_transform = target_transform
+        self.pre_progress = pre_progress
+        self.kwargs = kwargs
+
+        if self.pre_progress is None:
+            self.pre_progress = default_scene_feat_pre_progress
+        else:
+            assert 'scene_feat' in pre_progress.__name__.lower()
+        if self.transform is None:
+            self.transform = default_sep_scene_feat_transforms
+        else:
+            assert 'scene_feat' in transform.__name__.lower()
+        if self.target_transform is None:
+            self.target_transform = default_scene_feat_target_transforms
+        else:
+            assert 'scene_feat' in target_transform.__name__.lower()
+
+        if self.tvt == 'train':
+            self.feats_path = os.path.join(self.root, SCENE_TRAIN_NAME)
+            self.gt_path = os.path.join(self.root, FEAT_PATH, TRAIN_GT_NAME)
+        elif self.tvt == 'val':
+            self.feats_path = os.path.join(self.root, SCENE_VAL_NAME)
+            self.gt_path = os.path.join(self.root, FEAT_PATH, VAL_GT_NAME)
+        elif self.tvt == 'train+val' or self.tvt == 'train+val-noise':
+            self.train_feats_path = os.path.join(self.root, SCENE_TRAIN_NAME)
+            self.val_feats_path = os.path.join(self.root, SCENE_VAL_NAME)
+
+            self.train_gt_path = os.path.join(self.root, TRAIN_GT_NAME)
+            self.val_gt_path = os.path.join(self.root, VAL_GT_NAME)
+        elif self.tvt == 'test':
+            self.feats_path = os.path.join(self.root, SCENE_TEST_NAME)
+            self.gt_path = None
+
+        self._init_feat_labels()
+
+    def _init_feat_labels(self):
+        if self.tvt == 'train':
+            scene_infos = load_scene_infos(self.feats_path)
+            gt_labels = load_train_gt_from_txt(self.gt_path)
+        elif self.tvt == 'val':
+            scene_infos = load_scene_infos(self.feats_path)
+            gt_labels = load_val_gt_from_txt(self.gt_path)
+        elif self.tvt == 'train+val' or self.tvt == 'train+noise' or self.tvt == 'train+val-noise':
+            scene_infos = {}
+            scene_infos.update(load_train_gt_from_txt(self.train_feats_path))
+            scene_infos.update(load_train_gt_from_txt(self.val_feats_path))
+
+            gt_labels = {}
+            gt_labels.update(load_train_gt_from_txt(self.train_gt_path))
+            gt_labels.update(load_val_gt_from_txt(self.val_gt_path))
+        else:
+            scene_infos = load_body_from_pickle(self.feats_path)
+            gt_labels = {}
+
+        self.frame_infos, self.labels, self.video_names \
+            = self.pre_progress(scene_infos, gt_labels, **self.kwargs)
+        if self.tvt == 'train+val-noise':
+            self.frame_infos, self.labels, self.video_names \
+                = default_scene_feat_remove_noise(self.frame_infos, self.labels, self.video_names, **self.kwargs)
+        self.length = len(self.frame_infos)
+
+        assert len(self.frame_infos) == len(self.labels)
+        assert len(self.frame_infos) == len(self.video_names)
+
+    def __getitem__(self, index):
+        frame_info = self.frame_infos[index]
+        label = self.labels[index]
+        video_name = self.video_names[index]
+
+        feat = self.transform(frame_info, **self.kwargs)
+        label = self.target_transform(label, **self.kwargs)
+
+        return feat, label, video_name
+
+    def __len__(self):
+        return self.length

@@ -23,7 +23,9 @@ __all__ = ['init_logging', 'check_exists', 'load_train_gt_from_txt', 'load_val_g
            'default_image_pre_progress', 'default_image_transforms', 'default_image_target_transforms', 'crop_image',
            'prepare_device', 'default_image_remove_noise_in_val', 'default_scene_pre_progress', 'aug_vid_pre_progress',
            'default_scene_transforms', 'default_scene_target_transforms', 'default_scene_remove_noise_in_val',
-           'sep_cat_qds_select_vid_transforms', 'merge_multi_view_result', 'get_mask_index']
+           'sep_cat_qds_select_vid_transforms', 'merge_multi_view_result', 'get_mask_index', 'load_scene_infos',
+           'default_scene_feat_pre_progress', 'default_scene_feat_remove_noise', 'default_sep_scene_feat_transforms',
+           'default_scene_feat_target_transforms']
 
 LOG_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
 logger = logging.getLogger(__name__)
@@ -240,22 +242,28 @@ def default_image_pre_progress(video_infos, gt_infos, image_root, **kwargs):
     return file_paths, labels, video_names, bboxes, frame_ids
 
 
-def default_scene_pre_progress(gt_infos, image_root, **kwargs):
-    file_paths = []
-    labels = []
+def default_scene_pre_progress(tvt, image_root, num_frame=10, **kwargs):
+    image_paths = []
     video_names = []
+    image_indexes = []
 
-    for video_name, label in gt_infos.items():
-        video_root = os.path.join(image_root, video_name, )
-        image_list = os.listdir(video_root)
+    all_video_names = os.listdir(image_root)
+    for video_name in all_video_names:
+        if tvt in video_name.lower():
+            video_image_root = os.path.join(image_root, video_name)
+            all_image_names = os.listdir(video_image_root)
+            for float_idx in np.linspace(1, len(all_image_names), num_frame, endpoint=True):
+                int_index = np.math.floor(float_idx) - 1
 
-        temp_list = [os.path.join(video_root, image_list[idx])
-                     for idx in [0, len(image_list) // 2, len(image_list) - 1]]
-        file_paths.append(temp_list)
-        labels.append(label)
-        video_names.append(video_name)
+                image_name = all_image_names[int_index]
+                image_path = os.path.join(video_image_root, image_name)
+                image_index = int(os.path.splitext(image_name)[0])
 
-    return file_paths, labels, video_names
+                image_paths.append(image_path)
+                video_names.append(video_name)
+                image_indexes.append(image_index)
+
+    return image_paths, video_names, image_indexes
 
 
 def default_vid_pre_progress(video_infos, gt_infos, **kwargs):
@@ -783,13 +791,18 @@ def load_audio_from_pickle(file_path):
 def merge_multi_view_result(result_root):
     output_list = os.listdir(os.path.join(result_root, 'output'))
     name_list = os.listdir(os.path.join(result_root, 'name'))
+
+    logger.info('load name list from {}'.format(name_list[0]))
+
     with open(os.path.join(result_root, 'name', name_list[0]), 'rb') as fin:
         all_video_names = pickle.load(fin, encoding='bytes')
     all_outputs = .0
     for output_name in output_list:
+        logger.info('load output file from {}'.format(output_name))
+
         with open(os.path.join(result_root, 'output', output_name), 'rb') as fin:
             all_outputs += pickle.load(fin, encoding='bytes')
-    all_outputs = torch.from_numpy(all_outputs / len(name_list))
+    all_outputs = torch.from_numpy(all_outputs / len(output_list))
 
     return all_outputs, all_video_names
 
@@ -806,3 +819,57 @@ def get_mask_index(seed, feat_length, split_num):
         if idx != seed:
             mask_index += all_splits[idx]
     return mask_index
+
+
+def load_scene_infos(file_path):
+    with open(file_path, 'rb') as fin:
+        scene_infos = pickle.load(fin, encoding='bytes')
+    return scene_infos
+
+
+def default_scene_feat_pre_progress(scene_infos, gt_infos, **kwargs):
+    all_frame_infos = []
+    all_labels = []
+    all_video_names = []
+
+    for video_name, frame_infos in scene_infos:
+        all_labels.append(gt_infos.get(video_name, 0))
+        all_frame_infos.append(frame_infos)
+        all_video_names.append(video_name)
+    return all_frame_infos, all_labels, all_video_names
+
+
+def default_scene_feat_remove_noise(frame_infos, labels, video_names, **kwargs):
+    assert len(frame_infos) == len(labels)
+    assert len(labels) == len(video_names)
+    idx_list = []
+    for label_idx, label in enumerate(labels):
+        if 'TRAIN' in video_names[label_idx] or (label != 0 and 'VAL' in video_names[label_idx]):
+            idx_list.append(label_idx)
+
+    frame_infos = [frame_infos[idx] for idx in idx_list]
+    labels = [labels[idx] for idx in idx_list]
+    video_names = [video_names[idx] for idx in idx_list]
+
+    return frame_infos, labels, video_names
+
+
+def default_sep_scene_feat_transforms(frame_infos, num_frame=15, **kwargs):
+    if len(frame_infos) < num_frame:
+        frame_infos = np.random.choice(frame_infos, num_frame, replace=True)
+    else:
+        frame_infos = np.random.choice(frame_infos, num_frame, replace=False)
+
+    temp_feats = []
+    for frame_info in frame_infos:
+        temp_feats.append(frame_info[1])
+
+    feats = torch.from_numpy(np.array(temp_feats)).float()
+
+    return feats
+
+
+def default_scene_feat_target_transforms(label, **kwargs):
+    label_np = np.array(label)
+    label_torch = torch.from_numpy(label_np).long()
+    return label_torch

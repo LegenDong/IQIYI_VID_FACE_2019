@@ -5,5 +5,13 @@ python -u demo_train_multi_view.py --seed 2 --device 3
 python -u demo_train_multi_view.py --seed 3 --device 3
 python -u demo_train_multi_view.py --seed 4 --device 3
 python -u demo_train_multi_view.py --seed 5 --device 3
-
-
+python -u demo_train_multi_view.py --seed 6 --device 3
+python -u demo_train_multi_view.py --seed 7 --device 3
+python -u demo_train_multi_view.py --seed 8 --device 3
+python -u demo_train_multi_view.py --seed 9 --device 3
+python -u demo_train_multi_view.py --seed 10 --device 3
+python -u demo_train_multi_view.py --seed 11 --device 3
+python -u demo_train_multi_view.py --seed 12 --device 3
+python -u demo_train_multi_view.py --seed 13 --device 3
+python -u demo_train_multi_view.py --seed 14 --device 3
+python -u demo_train_multi_view.py --seed 15 --device 3

@@ -2,7 +2,7 @@
 # @Time    : 2019/5/20 17:10
 # @Author  : LegenDong
 # @User    : legendong
-# @File    : demo_extract_feature.py
+# @File    : demo_extract_face.py
 # @Software: PyCharm
 import argparse
 import os

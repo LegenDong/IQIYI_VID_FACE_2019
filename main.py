@@ -13,7 +13,7 @@ import numpy as np
 import torch
 
 import demo_test_nan
-from utils import check_exists, init_logging, merge_multi_view_result
+from utils import init_logging, merge_multi_view_result
 
 logger = logging.getLogger(__name__)
 
@@ -54,13 +54,6 @@ if __name__ == '__main__':
     result_log_path = os.path.join(log_root, 'result_log.txt')
     result_path = os.path.join(result_root, 'result.txt')
     log_path = os.path.join(log_root, 'log.txt')
-
-    if check_exists(result_log_path):
-        os.remove(result_log_path)
-    if check_exists(result_path):
-        os.remove(result_path)
-    if check_exists(log_path):
-        os.remove(log_path)
 
     init_logging(log_path)
 

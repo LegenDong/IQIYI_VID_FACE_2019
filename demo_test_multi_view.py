@@ -32,7 +32,7 @@ def main(data_root, num_frame, num_attn, moda, seed, epoch):
 
     dataset = IQiYiVidDataset(data_root, 'test', moda, transform=sep_cat_qds_select_vid_transforms,
                               mask_index=mask_index, num_frame=num_frame)
-    data_loader = DataLoader(dataset, batch_size=2048, shuffle=False, num_workers=0)
+    data_loader = DataLoader(dataset, batch_size=4096, shuffle=False, num_workers=0)
 
     model = ArcFaceNanModel(len(mask_index) + 2, 10034 + 1, num_attn=num_attn)
     metric_func = torch.nn.Softmax(-1)
@@ -91,12 +91,13 @@ if __name__ == '__main__':
     result_path = os.path.join(result_root, 'result.txt')
     log_path = os.path.join(log_root, 'log.txt')
 
-    if check_exists(result_log_path):
-        os.remove(result_log_path)
-    if check_exists(result_path):
-        os.remove(result_path)
-    if check_exists(log_path):
-        os.remove(log_path)
+    if args.seed == 0:
+        if check_exists(result_log_path):
+            os.remove(result_log_path)
+        if check_exists(result_path):
+            os.remove(result_path)
+        if check_exists(log_path):
+            os.remove(log_path)
 
     init_logging(log_path)
 

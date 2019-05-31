@@ -4,6 +4,8 @@
 # @User    : legendong
 # @File    : models.py
 # @Software: PyCharm
+import re
+
 import torch
 import torch.nn.functional as F
 from torch import nn
@@ -11,14 +13,16 @@ from torch.nn import Parameter
 
 from models.layer import MultiModalAttentionLayer, NanAttentionLayer, VLADLayer, PerceptronLayer
 from models.se_resnext import se_resnext50_32x4d
+from .densenet import densenet161
 from .se_resnet import se_resnet50
 
 __all__ = ['BaseModel', 'ArcFaceModel', 'ArcFaceMaxOutModel', 'ArcFaceMultiModalModel', 'ArcFaceNanModel',
            'ArcFaceNanMaxOutModel', 'ArcFaceVLADModel', 'ArcFaceSimpleModel', 'ArcFaceSEResNetModel',
-           'ArcFaceSEResNeXtModel', 'ArcFaceSubModel', 'ArcFaceMultiModalNanModel']
+           'ArcFaceSEResNeXtModel', 'ArcFaceSubModel', 'ArcFaceMultiModalNanModel', 'DenseNetModel']
 
 SENET_PATH = './model_zoo/senet50_vggface2.pth'
 SENEXT_PATH = './model_zoo/se_resnext50_32x4d-a260b3a4.pth'
+DESNET_PATH = './model_zoo/densenet161_places365.pth.tar'
 
 
 class BaseModel(nn.Module):
@@ -442,4 +446,52 @@ class ArcFaceMultiModalNanModel(nn.Module):
 
         output = F.linear(F.normalize(output), F.normalize(self.weight))
 
+        return output
+
+
+class DenseNetModel(nn.Module):
+    def __init__(self, num_classes=1000, include_top=False):
+        super(DenseNetModel, self).__init__()
+        self.num_classes = num_classes
+        self.include_top = include_top
+
+        self.model_path = DESNET_PATH
+
+        self._init_modules()
+
+    def _init_modules(self):
+        densenet = densenet161(num_classes=1000)
+
+        checkpoint = torch.load(self.model_path, map_location=lambda storage, loc: storage)
+        state_dict = {str.replace(k, 'module.', ''): v for k, v in checkpoint['state_dict'].items()}
+
+        remove_data_parallel = False
+        pattern = re.compile(
+            r'^(.*denselayer\d+\.(?:norm|relu|conv))\.((?:[12])\.(?:weight|bias|running_mean|running_var))$')
+        for key in list(state_dict.keys()):
+            match = pattern.match(key)
+            new_key = match.group(1) + match.group(2) if match else key
+            new_key = new_key[7:] if remove_data_parallel else new_key
+            state_dict[new_key] = state_dict[key]
+            # Delete old key only if modified.
+            if match or remove_data_parallel:
+                del state_dict[key]
+        print('loading pre-trained weight for densenet from {}.'.format(self.model_path))
+        densenet.load_state_dict({k: v for k, v in state_dict.items() if k in densenet.state_dict()})
+
+        self.base_model = densenet.features
+
+        self.weight = Parameter(torch.FloatTensor(self.num_classes, 2208))
+        nn.init.xavier_uniform_(self.weight)
+
+    def forward(self, x):
+        output = self.base_model(x)
+
+        if self.include_top:
+            output = F.relu(output, inplace=True)
+            output = F.avg_pool2d(output, kernel_size=7, stride=1).view(output.size(0), -1)
+            output = output.view(output.size(0), -1)
+            output = F.linear(F.normalize(output), F.normalize(self.weight))
+        else:
+            output = F.avg_pool2d(output, kernel_size=7, stride=1).view(output.size(0), -1)
         return output
