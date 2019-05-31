@@ -192,8 +192,8 @@ class ArcFaceNanModel(nn.Module):
         self.out_features = out_features
         self.num_attn = num_attn
 
-        self.nan_layer = NanAttentionLayer(self.in_features, self.num_attn)
         self.multi_modal_attention_layer = MultiModalAttentionLayer(40)
+        self.nan_layer = NanAttentionLayer(self.in_features, self.num_attn)
 
         self.fc = nn.Sequential(nn.Linear(self.in_features, self.in_features * 2),
                                 nn.BatchNorm1d(self.in_features * 2),

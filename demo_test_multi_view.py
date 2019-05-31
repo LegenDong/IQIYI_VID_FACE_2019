@@ -1,38 +1,44 @@
 # -*- coding: utf-8 -*-
-# @Time    : 2019/5/26 13:54
+# @Time    : 2019/5/30 11:50
 # @Author  : LegenDong
 # @User    : legendong
-# @File    : demo_train_perceptron.py
+# @File    : demo_test_multi_view.py
 # @Software: PyCharm
 import argparse
 import logging
 import os
-import random
+import pickle
 
-import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
 from datasets import IQiYiVidDataset
-from models import ArcFaceSubModel
-from utils import check_exists, init_logging, sep_cat_qds_vid_transforms
+from models import ArcFaceNanModel
+from utils import check_exists, init_logging, sep_cat_qds_select_vid_transforms
 
 logger = logging.getLogger(__name__)
 
 
-def main(data_root, num_frame, num_attn, middle_ratio, block_num, epoch):
-    load_path = './checkpoints/sub_models/demo_arcface_sub_{}_{}_{}_model_{:0>4d}.pth' \
-        .format(num_attn, middle_ratio, block_num, epoch)
-    assert check_exists(load_path)
+def main(data_root, num_frame, num_attn, moda, seed, epoch):
+    mask_path = './checkpoints/multi_view/mask_index_file_{}.pickle'.format(seed)
+    assert check_exists(mask_path)
 
-    dataset = IQiYiVidDataset(data_root, 'test', 'face', transform=sep_cat_qds_vid_transforms, num_frame=num_frame)
+    with open(mask_path, 'rb') as fin:
+        mask_index = pickle.load(fin, encoding='bytes')
+    print(mask_index)
+
+    model_path = './checkpoints/multi_view/demo_arcface_{}_multi_view_{}_model_{:0>4d}.pth'.format(moda, seed, epoch)
+    assert check_exists(model_path)
+
+    dataset = IQiYiVidDataset(data_root, 'test', moda, transform=sep_cat_qds_select_vid_transforms,
+                              mask_index=mask_index, num_frame=num_frame)
     data_loader = DataLoader(dataset, batch_size=2048, shuffle=False, num_workers=0)
 
-    model = ArcFaceSubModel(512 + 2, 10034 + 1, num_attn=num_attn, middle_ratio=middle_ratio, block_num=block_num)
+    model = ArcFaceNanModel(len(mask_index) + 2, 10034 + 1, num_attn=num_attn)
     metric_func = torch.nn.Softmax(-1)
 
-    logger.info('load model from {}'.format(load_path))
-    state_dict = torch.load(load_path, map_location='cpu')
+    logger.info('load model from {}'.format(model_path))
+    state_dict = torch.load(model_path, map_location='cpu')
     model.load_state_dict(state_dict)
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -68,20 +74,15 @@ if __name__ == '__main__':
     parser.add_argument('--result_root', default='/data/result/', type=str,
                         help='path to save result (default: /data/result/)')
     parser.add_argument('--num_frame', default=40, type=int, help='size of video length (default: 40)')
+    parser.add_argument('--num_attn', default=1, type=int, help='number of attention block in NAN')
+    parser.add_argument('--moda', default='face', type=str, help='modal[face, head] of model train, (default: face)')
     parser.add_argument('--epoch', type=int, default=100, help="the epoch num for train (default: 100)")
-    parser.add_argument('--num_attn', default=1, type=int, help='number of attention block in NAN (default: 1)')
-    parser.add_argument('--middle_ratio', default=2, type=int, help='ratio of middle layer (default:)')
-    parser.add_argument('--block_num', default=1, type=int, help='number of perceptron block use (default: 1)')
+    parser.add_argument('--seed', type=int, default=3, help="random seed for multi view (default: 0)")
+
     args = parser.parse_args()
 
     if args.device:
         os.environ["CUDA_VISIBLE_DEVICES"] = args.device
-
-    SEED = 0
-    random.seed(SEED)
-    np.random.seed(SEED)
-    torch.manual_seed(SEED)
-    torch.cuda.manual_seed(SEED)
 
     log_root = args.log_root
     result_root = args.result_root
@@ -99,14 +100,18 @@ if __name__ == '__main__':
 
     init_logging(log_path)
 
-    all_outputs, all_video_names = main(args.data_root, args.num_frame, args.num_attn, args.middle_ratio,
-                                        args.block_num, args.epoch, )
+    all_outputs, all_video_names = main(args.data_root, args.num_frame, args.num_attn, args.moda, args.seed, args.epoch)
 
-    top100_value, top100_idxes = torch.topk(all_outputs, 100, dim=0)
-    with open(result_log_path, 'w', encoding='utf-8') as f_result_log:
-        with open(result_path, 'w', encoding='utf-8') as f_result:
-            for label_idx in range(1, 10034 + 1):
-                video_names_list = ['{}.mp4'.format(all_video_names[idx]) for idx in top100_idxes[:, label_idx]]
-                video_names_str = ' '.join(video_names_list)
-                f_result.write('{} {}\n'.format(label_idx, video_names_str))
-                f_result_log.write('{} {}\n'.format(label_idx, video_names_str))
+    with open('./multi_view_result/output/temp_result_{}.pickle'.format(args.seed), 'wb') as fout:
+        pickle.dump(all_outputs.numpy(), fout)
+    with open('./multi_view_result/name/temp_names_{}.pickle'.format(args.seed), 'wb') as fout:
+        pickle.dump(all_video_names, fout)
+
+    # top100_value, top100_idxes = torch.topk(all_outputs, 100, dim=0)
+    # with open(result_log_path, 'w', encoding='utf-8') as f_result_log:
+    #     with open(result_path, 'w', encoding='utf-8') as f_result:
+    #         for label_idx in range(1, 10034 + 1):
+    #             video_names_list = ['{}.mp4'.format(all_video_names[idx]) for idx in top100_idxes[:, label_idx]]
+    #             video_names_str = ' '.join(video_names_list)
+    #             f_result.write('{} {}\n'.format(label_idx, video_names_str))
+    #             f_result_log.write('{} {}\n'.format(label_idx, video_names_str))

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# @Time    : 2019/5/11 14:44
+# @Time    : 2019/5/30 12:31
 # @Author  : LegenDong
 # @User    : legendong
 # @File    : non_local_layer.py
@@ -9,16 +9,16 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-__all__ = ['MultiModalAttentionLayer']
+__all__ = ['NonLocalLayer']
 
 
 def conv1x1(in_planes, out_planes, stride=1):
     return nn.Conv1d(in_planes, out_planes, kernel_size=1, stride=stride, padding=0, bias=False)
 
 
-class MultiModalAttentionLayer(nn.Module):
+class NonLocalLayer(nn.Module):
     def __init__(self, inplanes, planes=None, bn_layer=True):
-        super(MultiModalAttentionLayer, self).__init__()
+        super(NonLocalLayer, self).__init__()
 
         self.inplanes = inplanes
         self.planes = planes
@@ -33,53 +33,44 @@ class MultiModalAttentionLayer(nn.Module):
                 conv1x1(self.planes, self.inplanes),
                 nn.BatchNorm1d(self.inplanes)
             )
-            nn.init.constant_(self.W_z[0].weight, .0)
+            nn.init.constant_(self.W_z[0].weight, 1e-10)
         else:
             self.W_z = conv1x1(self.planes, self.inplanes)
-            nn.init.constant_(self.W_z.weight, .0)
+            nn.init.constant_(self.W_z.weight, 1e-10)
 
-        if bn_layer:
-            self.W_theta = nn.Sequential(
-                conv1x1(self.inplanes, self.planes),
-                nn.BatchNorm1d(self.planes)
-            )
-            nn.init.constant_(self.W_theta[0].weight, .0)
-
-            self.W_phi = nn.Sequential(
-                conv1x1(self.inplanes, self.planes),
-                nn.BatchNorm1d(self.planes)
-            )
-            nn.init.constant_(self.W_phi[0].weight, .0)
-        else:
-            self.W_theta = conv1x1(self.inplanes, self.planes)
-            nn.init.constant_(self.W_theta.weight, .0)
-
-            self.W_phi = conv1x1(self.inplanes, self.planes)
-            nn.init.constant_(self.W_phi.weight, .0)
+        self.W_theta = conv1x1(self.inplanes, self.planes)
+        self.W_phi = conv1x1(self.inplanes, self.planes)
 
     def forward(self, x):
         # print(x.size())
 
-        # g_x -> (b, c, l) -> (b, 0.5c, l)
+        # g_x -> (b, c, l) -> (b, 0.5c, l) -> (b, 0.5c, l) -> (b, l, 0.5c)
         g_x = self.W_g(x)
+        g_x = g_x.view(g_x.size(0), g_x.size(1), -1)
+        g_x = g_x.permute(0, 2, 1)
         # print(g_x.size())
 
-        # theta_x -> (b, c, l) -> (b, 0.5c, l)
+        # theta_x -> (b, c, l) -> (b, 0.5c, l) -> (b, 0.5c, l) -> (b, l, 0.5c)
         theta_x = self.W_theta(x)
+        theta_x = theta_x.view(theta_x.size(0), theta_x.size(1), -1)
+        theta_x = theta_x.permute(0, 2, 1)
         # print(theta_x.size())
 
-        # phi_x -> (b, c, l) -> (b, 0.5c, l) -> (b, l, 0.5c)
+        # phi_x -> (b, c, l) -> (b, 0.5c, l) -> (b, 0.5c, l)
         phi_x = self.W_phi(x)
-        phi_x = phi_x.permute(0, 2, 1)
+        phi_x = phi_x.view(phi_x.size(0), phi_x.size(1), -1)
         # print(phi_x.size())
 
-        # f -> (b, 0.5c, l) dot (b, l, 0.5c) -> (b, 0.5c, 0.5c)
+        # f -> (b, l, 0.5c) dot (b, 0.5c, l) -> (b, l, l)
         f_x = torch.matmul(theta_x, phi_x)
         f_x = F.softmax(f_x, dim=-1)
         # print(f_x.size())
 
-        # (b, 0.5c, 0.5c) dot (b, 0.5c, l) -> (b, 0.5c, l)
+        # (b, l, l) dot (b, l, 0.5c) -> (b, l, 0.5c)
+        # -> (b, 0.5c, l) -> (b, c, l)
         y = torch.matmul(f_x, g_x)
+        y = y.permute(0, 2, 1).contiguous()
+        y = y.view(y.size(0), y.size(1), x.size(2), )
         y = self.W_z(y)
         # print(y.size())
 
@@ -90,6 +81,6 @@ class MultiModalAttentionLayer(nn.Module):
 
 if __name__ == '__main__':
     img = torch.zeros(2, 4, 512)
-    net = MultiModalAttentionLayer(4, 4)
+    net = NonLocalLayer(4)
     out = net(img)
     print(out.size())

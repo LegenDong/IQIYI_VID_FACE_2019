@@ -12,17 +12,14 @@ import time
 import numpy as np
 import torch
 
-import demo_test_mean_maxout_nan
 import demo_test_nan
-from utils import check_exists, init_logging
+from utils import check_exists, init_logging, merge_multi_view_result
 
 logger = logging.getLogger(__name__)
 
 
 def main(data_root):
-    all_outputs_1, all_video_names_1 = \
-        demo_test_mean_maxout_nan.main(data_root, 40, 1, 'face',
-                                       (10000, 11000, 12000, 13000, 14000, 15000, 16000, 17000, 18000, 19000), 100)
+    all_outputs_1, all_video_names_1 = merge_multi_view_result('./multi_view_result')
     all_outputs_2, all_video_names_2 = demo_test_nan.main(data_root, 40, 1, 'head', 200)
 
     new_all_outputs = []
@@ -72,7 +69,7 @@ if __name__ == '__main__':
     top100_value, top100_idxes = torch.topk(all_outputs, 100, dim=0)
     with open(result_log_path, 'w', encoding='utf-8') as f_result_log:
         with open(result_path, 'w', encoding='utf-8') as f_result:
-            for label_idx in range(1, 10034):
+            for label_idx in range(1, 10034 + 1):
                 video_names_list = ['{}.mp4'.format(all_video_names[idx]) for idx in top100_idxes[:, label_idx]]
                 video_names_str = ' '.join(video_names_list)
                 f_result.write('{} {}\n'.format(label_idx, video_names_str))

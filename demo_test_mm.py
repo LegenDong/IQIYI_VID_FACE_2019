@@ -101,7 +101,7 @@ if __name__ == '__main__':
     top100_value, top100_idxes = torch.topk(all_outputs, 100, dim=0)
     with open(result_log_path, 'w', encoding='utf-8') as f_result_log:
         with open(result_path, 'w', encoding='utf-8') as f_result:
-            for label_idx in range(1, 10034):
+            for label_idx in range(1, 10034 + 1):
                 video_names_list = ['{}.mp4'.format(all_video_names[idx]) for idx in top100_idxes[:, label_idx]]
                 video_names_str = ' '.join(video_names_list)
                 f_result.write('{} {}\n'.format(label_idx, video_names_str))

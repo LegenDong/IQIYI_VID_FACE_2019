@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
-# @Time    : 2019-05-10 17:21
-# @Author  : edward
-# @File    : demo_train_nan.py
+# @Time    : 2019/5/30 10:41
+# @Author  : LegenDong
+# @User    : legendong
+# @File    : demo_train_multi_view.py
 # @Software: PyCharm
 import argparse
 import os
+import pickle
 import random
 
 import numpy as np
@@ -14,17 +16,24 @@ from torch.utils.data import DataLoader
 
 from datasets import IQiYiVidDataset
 from models import ArcFaceNanModel, FocalLoss, ArcMarginProduct
-from utils import check_exists, save_model, sep_cat_qds_vid_transforms
+from utils import check_exists, save_model, sep_cat_qds_select_vid_transforms, get_mask_index
 
 
 def main(args):
     if not check_exists(args.save_dir):
         os.makedirs(args.save_dir)
 
-    assert args.moda in ['face', 'head']
+    model_id = args.seed
 
-    dataset = IQiYiVidDataset(args.data_root, 'train+val-noise', args.moda, transform=sep_cat_qds_vid_transforms,
-                              num_frame=args.num_frame, )
+    assert args.moda in ['face', 'head']
+    mask_index = get_mask_index(args.seed, 512, 16)
+    print(mask_index)
+
+    with open(os.path.join(args.save_dir, 'mask_index_file_{}.pickle'.format(model_id)), 'wb') as fout:
+        pickle.dump(mask_index, fout)
+
+    dataset = IQiYiVidDataset(args.data_root, 'train+val-noise', args.moda, transform=sep_cat_qds_select_vid_transforms,
+                              mask_index=mask_index, num_frame=args.num_frame, )
     data_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
 
     log_step = len(data_loader) // 10 if len(data_loader) > 10 else 1
@@ -69,30 +78,32 @@ def main(args):
 
         lr_scheduler.step()
 
-    save_model(model, args.save_dir, 'demo_arcface_{}_nan_model'.format(args.moda), args.epoch)
+    save_model(model, args.save_dir, 'demo_arcface_{}_multi_view_{}_model'.format(args.moda, model_id), args.epoch)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='PyTorch Template')
     parser.add_argument('--data_root', default='/data/materials', type=str,
                         help='path to load data (default: /data/materials/)')
-    parser.add_argument('--save_dir', default='./checkpoints/', type=str,
-                        help='path to save model (default: ./checkpoints/)')
-    parser.add_argument('--epoch', type=int, default=200, help="the epoch num for train (default: 100)")
+    parser.add_argument('--save_dir', default='./checkpoints/multi_view', type=str,
+                        help='path to save model (default: ./checkpoints/multi_view)')
+    parser.add_argument('--epoch', type=int, default=100, help="the epoch num for train (default: 100)")
     parser.add_argument('--device', default=None, type=str, help='indices of GPUs to enable (default: all)')
     parser.add_argument('--num_classes', default=10035, type=int, help='number of classes (default: 10035)')
     parser.add_argument('--batch_size', default=4096, type=int, help='dim of feature (default: 4096)')
-    parser.add_argument('--feat_dim', default=512 + 2, type=int, help='dim of feature (default: 512 + 2)')
+    parser.add_argument('--feat_dim', default=480 + 2, type=int, help='dim of feature (default: 480 + 2)')
     parser.add_argument('--learning_rate', type=float, default=0.1, help="learning rate for model (default: 0.1)")
     parser.add_argument('--num_frame', default=40, type=int, help='size of video length (default: 40)')
     parser.add_argument('--num_attn', default=1, type=int, help='number of attention block in NAN')
-    parser.add_argument('--moda', default='head', type=str, help='modal[face, head] of model train, (default: face)')
+    parser.add_argument('--moda', default='face', type=str, help='modal[face, head] of model train, (default: face)')
+    parser.add_argument('--seed', default=0, type=int, help='seed for all random module (default: 0)')
+
     args = parser.parse_args()
 
     if args.device:
         os.environ["CUDA_VISIBLE_DEVICES"] = args.device
 
-    SEED = 0
+    SEED = args.seed
     random.seed(SEED)
     np.random.seed(SEED)
     torch.manual_seed(SEED)

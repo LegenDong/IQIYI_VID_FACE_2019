@@ -22,7 +22,8 @@ __all__ = ['init_logging', 'check_exists', 'load_train_gt_from_txt', 'load_val_g
            'default_identity_target_transforms', 'default_identity_transforms', 'default_identity_pre_progress',
            'default_image_pre_progress', 'default_image_transforms', 'default_image_target_transforms', 'crop_image',
            'prepare_device', 'default_image_remove_noise_in_val', 'default_scene_pre_progress', 'aug_vid_pre_progress',
-           'default_scene_transforms', 'default_scene_target_transforms', 'default_scene_remove_noise_in_val']
+           'default_scene_transforms', 'default_scene_target_transforms', 'default_scene_remove_noise_in_val',
+           'sep_cat_qds_select_vid_transforms', 'merge_multi_view_result', 'get_mask_index']
 
 LOG_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
 logger = logging.getLogger(__name__)
@@ -216,6 +217,7 @@ def default_image_pre_progress(video_infos, gt_infos, image_root, **kwargs):
     file_paths = []
     bboxes = []
     labels = []
+    frame_ids = []
     video_names = []
     for video_info in video_infos:
         video_name = video_info['video_name']
@@ -234,7 +236,8 @@ def default_image_pre_progress(video_infos, gt_infos, image_root, **kwargs):
             file_paths.append(file_path)
             labels.append(label)
             video_names.append(video_name)
-    return file_paths, labels, video_names, bboxes
+            frame_ids.append(frame_id)
+    return file_paths, labels, video_names, bboxes, frame_ids
 
 
 def default_scene_pre_progress(gt_infos, image_root, **kwargs):
@@ -276,7 +279,7 @@ def default_vid_pre_progress(video_infos, gt_infos, **kwargs):
     return list(vid_infos.values())
 
 
-def aug_vid_pre_progress(video_infos, gt_infos, aug_num_vid=10, aug_num_frame=50, **kwargs):
+def aug_vid_pre_progress(video_infos, gt_infos, aug_num_vid=10, aug_num_frame=50, only_train=True, **kwargs):
     assert aug_num_vid >= 0
     vid_infos = {}
     no_frame = []
@@ -302,7 +305,8 @@ def aug_vid_pre_progress(video_infos, gt_infos, aug_num_vid=10, aug_num_frame=50
     if aug_num_vid > 0:
         id_infos = {}
         for key, value in gt_infos.items():
-            id_infos.setdefault(value, []).append(key)
+            if not only_train or 'TRAIN' in key:
+                id_infos.setdefault(value, []).append(key)
 
         count_aug = 1
         for key, values in id_infos.items():
@@ -406,10 +410,11 @@ def default_remove_noise_in_val(feats, labels, video_names, **kwargs):
     return feats, labels, video_names
 
 
-def default_image_remove_noise_in_val(file_paths, labels, video_names, bboxes, **kwargs):
+def default_image_remove_noise_in_val(file_paths, labels, video_names, bboxes, frame_ids, **kwargs):
     assert len(file_paths) == len(labels)
     assert len(labels) == len(video_names)
     assert len(video_names) == len(bboxes)
+    assert len(bboxes) == len(frame_ids)
 
     idx_list = []
     for label_idx, label in enumerate(labels):
@@ -419,8 +424,9 @@ def default_image_remove_noise_in_val(file_paths, labels, video_names, bboxes, *
     labels = [labels[idx] for idx in idx_list]
     video_names = [video_names[idx] for idx in idx_list]
     bboxes = [bboxes[idx] for idx in idx_list]
+    frame_ids = [frame_ids[idx] for idx in idx_list]
 
-    return file_paths, labels, video_names, bboxes
+    return file_paths, labels, video_names, bboxes, frame_ids
 
 
 def default_scene_remove_noise_in_val(file_paths, labels, video_names, **kwargs):
@@ -487,6 +493,30 @@ def sep_cat_qds_vid_transforms(vid_info, modes, num_frame=15, norm_value=100., *
                 feat = np.append(feat, frame_info['det_score'])
             feat = np.append(feat, frame_info['det_score'])
             temp_feats.append(feat)
+        feats = np.array(temp_feats)
+        result.append(torch.from_numpy(feats).float())
+    return result
+
+
+def sep_cat_qds_select_vid_transforms(vid_info, modes, num_frame=15, mask_index=None, **kwargs):
+    result = []
+    for mode in modes:
+        frames_infos = vid_info[mode]
+        if len(frames_infos) < num_frame:
+            frames_infos = np.random.choice(frames_infos, num_frame, replace=True)
+        else:
+            frames_infos = np.random.choice(frames_infos, num_frame, replace=False)
+        temp_feats = []
+        for frames_info in frames_infos:
+            temp_feat = frames_info['feat']
+            if mask_index is not None:
+                temp_feat = temp_feat[mask_index]
+            if mode == 'face':
+                temp_feat = np.append(temp_feat, frames_info['quality_score'] / 100.)
+            else:
+                temp_feat = np.append(temp_feat, frames_info['det_score'])
+            temp_feat = np.append(temp_feat, frames_info['det_score'])
+            temp_feats.append(temp_feat)
         feats = np.array(temp_feats)
         result.append(torch.from_numpy(feats).float())
     return result
@@ -642,6 +672,7 @@ def load_face_from_pickle(file_path):
         for ind, face_feat in enumerate(face_feats):
             [frame_str, bbox, det_score, quality_score, feat] = face_feat
             [x1, y1, x2, y2] = bbox
+            # print(frame_str)
             assert (int(frame_str) >= last_fame_num)
             last_fame_num = int(frame_str)
             assert (0 <= x1 <= x2)
@@ -747,3 +778,31 @@ def load_audio_from_pickle(file_path):
             'feat': audio_feat})
 
     return video_infos
+
+
+def merge_multi_view_result(result_root):
+    output_list = os.listdir(os.path.join(result_root, 'output'))
+    name_list = os.listdir(os.path.join(result_root, 'name'))
+    with open(os.path.join(result_root, 'name', name_list[0]), 'rb') as fin:
+        all_video_names = pickle.load(fin, encoding='bytes')
+    all_outputs = .0
+    for output_name in output_list:
+        with open(os.path.join(result_root, 'output', output_name), 'rb') as fin:
+            all_outputs += pickle.load(fin, encoding='bytes')
+    all_outputs = torch.from_numpy(all_outputs / len(name_list))
+
+    return all_outputs, all_video_names
+
+
+def get_mask_index(seed, feat_length, split_num):
+    feat_idxes = list(range(feat_length))
+    split_length = feat_length // split_num
+
+    assert split_length * split_num == feat_length
+
+    all_splits = [feat_idxes[i:i + split_length] for i in range(0, len(feat_idxes), split_length)]
+    mask_index = []
+    for idx in range(len(all_splits)):
+        if idx != seed:
+            mask_index += all_splits[idx]
+    return mask_index

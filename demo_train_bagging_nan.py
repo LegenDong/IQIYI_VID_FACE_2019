@@ -142,9 +142,9 @@ if __name__ == '__main__':
     parser.add_argument('--feat_dim', default=512, type=int, help='dim of feature (default: 512)')
     parser.add_argument('--save_interval', default=10, type=int, help='interval of epochs for save model (default: 10)')
     parser.add_argument('--learning_rate', type=float, default=0.1, help="learning rate for model (default: 0.1)")
-    parser.add_argument('--num_frame', default=30, type=int, help='size of video length (default: 30)')
+    parser.add_argument('--num_frame', default=40, type=int, help='size of video length (default: 40)')
     parser.add_argument('--num_attn', default=1, type=int, help='number of attention block in NAN')
-    parser.add_argument('--moda', default='face', type=str, help='modal[face, head] of model train, (default: face)')
+    parser.add_argument('--moda', default='head', type=str, help='modal[face, head] of model train, (default: face)')
 
     args = parser.parse_args()
 

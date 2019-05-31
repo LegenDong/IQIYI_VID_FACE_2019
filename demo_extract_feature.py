@@ -36,13 +36,13 @@ def main(data_root, save_dir, tvt, num_classes, batch_size):
     video_infos = {}
     start = time.time()
     with torch.no_grad():
-        for batch_idx, (images, labels, video_names) in enumerate(data_loader):
+        for batch_idx, (images, labels, video_names, frame_ids) in enumerate(data_loader):
             images = images.to(device)
             output = model(images)
             output_np = output.cpu().numpy().astype(np.float16)
             for idx, video_name in enumerate(video_names):
                 video_infos.setdefault(video_name.encode('utf-8'), []) \
-                    .append(('0', (0., 0., 0., 0.), 1.0, 200., output_np[idx]))
+                    .append((str(frame_ids[idx].item()), (0., 0., 0., 0.), 1.0, 200., output_np[idx]))
 
             if batch_idx % log_step == 0 and batch_idx != 0:
                 end = time.time()
