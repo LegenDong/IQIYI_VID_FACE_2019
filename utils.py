@@ -821,6 +821,7 @@ def get_mask_index(seed, feat_length, split_num):
 
 
 def load_scene_infos(file_path):
+    assert check_exists(file_path)
     with open(file_path, 'rb') as fin:
         scene_infos = pickle.load(fin, encoding='bytes')
     return scene_infos

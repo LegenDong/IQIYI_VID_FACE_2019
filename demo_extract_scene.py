@@ -26,9 +26,9 @@ def main(args):
     if not check_exists(args.save_dir):
         os.makedirs(args.save_dir)
 
-    dataset = IQiYiExtractSceneDataset(args.data_root, args.tvt, image_root='/home/dcq/img', num_frame=args.num_frame)
+    dataset = IQiYiExtractSceneDataset(args.data_root, args.tvt, image_root='/home/dcq/img', num_frame=10)
     logger.info('the size of the dataset for extract scene feat is {}'.format(len(dataset)))
-    data_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=False, num_workers=1, pin_memory=True)
+    data_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=False, num_workers=0, pin_memory=True)
 
     log_step = len(data_loader) // 100 if len(data_loader) > 100 else 1
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -52,7 +52,7 @@ def main(args):
             all_image_index += image_indexes.tolist()
             all_scene_feat.append(outputs.cpu())
 
-            if batch_idx % log_step == 0 and batch_idx != 0:
+            if batch_idx % log_step == 0:
                 end = time.time()
                 log_info = '[{}/{} ({:.0f}%)] Time: {}' \
                     .format(batch_idx * args.batch_size, len(dataset),
@@ -67,7 +67,7 @@ def main(args):
     for idx, video_name in enumerate(all_video_names):
         scene_infos.setdefault(video_name, []).append((all_image_index[idx], all_scene_feat[idx]))
 
-    with open(os.path.join(args.save_dir, 'scene_infos_{}_{}.pickle'.format(args.tvt, args.num_frame)), 'wb') as fout:
+    with open(os.path.join(args.save_dir, 'scene_infos_{}.pickle'.format(args.tvt)), 'wb') as fout:
         pickle.dump(scene_infos, fout)
 
 
@@ -83,7 +83,6 @@ if __name__ == '__main__':
     parser.add_argument('--num_classes', default=10035, type=int, help='number of classes (default: 10035)')
     parser.add_argument('--batch_size', default=512, type=int, help='bat of feature (default: 512)')
     parser.add_argument('--tvt', default='train', type=str, help='train, val or test to extract feat (default: train)')
-    parser.add_argument('--num_frame', default=10, type=int, help='num of each video extract (default: 10)')
 
     args = parser.parse_args()
 

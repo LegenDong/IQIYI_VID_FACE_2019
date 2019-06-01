@@ -13,7 +13,7 @@ import time
 import numpy as np
 import torch
 
-from utils import init_logging, merge_multi_view_result, split_name_by_l2norm
+from utils import init_logging, merge_multi_view_result, split_name_by_l2norm, check_exists
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +27,7 @@ def main():
 
     all_outputs, all_video_names = merge_multi_view_result('./multi_view_result')
 
+    assert check_exists('./scene_result/name_output_dict.pickle')
     with open('./scene_result/name_output_dict.pickle', 'rb') as fin:
         name_output_dict = pickle.load(fin, encoding='bytes')
 
