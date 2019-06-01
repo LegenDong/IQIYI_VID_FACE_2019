@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# @Time    : 2019/5/30 11:50
+# @Time    : 2019/5/31 16:17
 # @Author  : LegenDong
 # @User    : legendong
-# @File    : demo_test_multi_view.py
+# @File    : demo_test_multi_view_maxout.py
 # @Software: PyCharm
 import argparse
 import logging
@@ -13,28 +13,25 @@ import torch
 from torch.utils.data import DataLoader
 
 from datasets import IQiYiVidDataset
-from models import ArcFaceNanModel
-from utils import check_exists, init_logging, sep_cat_qds_select_vid_transforms
+from models import ArcFaceNanMaxOutModel
+from utils import check_exists, init_logging, sep_cat_qds_select_vid_transforms, get_mask_index
 
 logger = logging.getLogger(__name__)
 
 
-def main(data_root, num_frame, num_attn, moda, seed, epoch):
-    mask_path = './checkpoints/multi_view/mask_index_file_{}.pickle'.format(seed)
-    assert check_exists(mask_path)
-
-    with open(mask_path, 'rb') as fin:
-        mask_index = pickle.load(fin, encoding='bytes')
+def main(data_root, num_frame, num_attn, moda, seed, stuff_labels, epoch):
+    mask_index = get_mask_index(seed, 512, 16)
     print(mask_index)
 
-    model_path = './checkpoints/multi_view/demo_arcface_{}_multi_view_{}_model_{:0>4d}.pth'.format(moda, seed, epoch)
+    model_path = './checkpoints/multi_view/demo_arcface_{}_multi_view_stuff_{}_{}_model_{:0>4d}.pth' \
+        .format(moda, stuff_labels, seed, epoch)
     assert check_exists(model_path)
 
     dataset = IQiYiVidDataset(data_root, 'test', moda, transform=sep_cat_qds_select_vid_transforms,
                               mask_index=mask_index, num_frame=num_frame)
     data_loader = DataLoader(dataset, batch_size=4096, shuffle=False, num_workers=0)
 
-    model = ArcFaceNanModel(len(mask_index) + 2, 10034 + 1, num_attn=num_attn)
+    model = ArcFaceNanMaxOutModel(len(mask_index) + 2, 10034 + 1, num_attn=num_attn, stuff_labels=stuff_labels)
     metric_func = torch.nn.Softmax(-1)
 
     logger.info('load model from {}'.format(model_path))
@@ -77,7 +74,8 @@ if __name__ == '__main__':
     parser.add_argument('--num_attn', default=1, type=int, help='number of attention block in NAN')
     parser.add_argument('--moda', default='face', type=str, help='modal[face, head] of model train, (default: face)')
     parser.add_argument('--epoch', type=int, default=100, help="the epoch num for train (default: 100)")
-    parser.add_argument('--seed', type=int, default=3, help="random seed for multi view (default: 0)")
+    parser.add_argument('--seed', type=int, default=0, help="random seed for multi view (default: 0)")
+    parser.add_argument('--stuff_labels', default=1000, type=int, help='stuff num for maxout model (default: 1000)')
 
     args = parser.parse_args()
 
@@ -93,7 +91,8 @@ if __name__ == '__main__':
 
     init_logging(log_path)
 
-    all_outputs, all_video_names = main(args.data_root, args.num_frame, args.num_attn, args.moda, args.seed, args.epoch)
+    all_outputs, all_video_names = main(args.data_root, args.num_frame, args.num_attn, args.moda, args.seed,
+                                        args.stuff_labels, args.epoch)
 
     with open('./multi_view_result/output/temp_result_{}.pickle'.format(args.seed), 'wb') as fout:
         pickle.dump(all_outputs.numpy(), fout)

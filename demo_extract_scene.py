@@ -5,6 +5,7 @@
 # @File    : demo_extract_scene.py
 # @Software: PyCharm
 import argparse
+import logging
 import os
 import pickle
 import random
@@ -16,18 +17,22 @@ from torch.utils.data import DataLoader
 
 from datasets import IQiYiExtractSceneDataset
 from models import DenseNetModel
-from utils import check_exists
+from utils import check_exists, init_logging
+
+logger = logging.getLogger(__name__)
 
 
 def main(args):
     if not check_exists(args.save_dir):
         os.makedirs(args.save_dir)
 
-    dataset = IQiYiExtractSceneDataset(args.data_root, args.tvt, image_root='/home/dcq/img', num_frame=10)
-    data_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=False, num_workers=4)
+    dataset = IQiYiExtractSceneDataset(args.data_root, args.tvt, image_root='/home/dcq/img', num_frame=args.num_frame)
+    logger.info('the size of the dataset for extract scene feat is {}'.format(len(dataset)))
+    data_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=False, num_workers=1, pin_memory=True)
 
     log_step = len(data_loader) // 100 if len(data_loader) > 100 else 1
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    logger.info('extract scene feat on {}'.format(device))
 
     model = DenseNetModel(args.num_classes, include_top=False)
     model = model.to(device)
@@ -49,9 +54,11 @@ def main(args):
 
             if batch_idx % log_step == 0 and batch_idx != 0:
                 end = time.time()
-                print(' [{}/{} ({:.0f}%)] Time: {}'
-                      .format(batch_idx * args.batch_size, len(dataset),
-                              100.0 * batch_idx / len(data_loader), (end - start)))
+                log_info = '[{}/{} ({:.0f}%)] Time: {}' \
+                    .format(batch_idx * args.batch_size, len(dataset),
+                            100.0 * batch_idx / len(data_loader), (end - start))
+                logger.info(log_info)
+                print(log_info)
                 start = time.time()
 
     all_scene_feat = torch.cat(all_scene_feat, dim=0).numpy()
@@ -60,7 +67,7 @@ def main(args):
     for idx, video_name in enumerate(all_video_names):
         scene_infos.setdefault(video_name, []).append((all_image_index[idx], all_scene_feat[idx]))
 
-    with open(os.path.join(args.save_dir, 'scene_infos_{}.pickle'.format(args.tvt)), 'wb') as fout:
+    with open(os.path.join(args.save_dir, 'scene_infos_{}_{}.pickle'.format(args.tvt, args.num_frame)), 'wb') as fout:
         pickle.dump(scene_infos, fout)
 
 
@@ -70,10 +77,13 @@ if __name__ == '__main__':
                         help='path to load data (default: /data/materials/)')
     parser.add_argument('--save_dir', default='./scene_feat/', type=str,
                         help='path to save scene feat (default: ./scene_feat/)')
+    parser.add_argument('--log_root', default='/data/logs/', type=str,
+                        help='path to save log (default: /data/logs/)')
     parser.add_argument('--device', default=None, type=str, help='indices of GPUs to enable (default: all)')
     parser.add_argument('--num_classes', default=10035, type=int, help='number of classes (default: 10035)')
-    parser.add_argument('--batch_size', default=512, type=int, help='dim of feature (default: 40)')
+    parser.add_argument('--batch_size', default=512, type=int, help='bat of feature (default: 512)')
     parser.add_argument('--tvt', default='train', type=str, help='train, val or test to extract feat (default: train)')
+    parser.add_argument('--num_frame', default=10, type=int, help='num of each video extract (default: 10)')
 
     args = parser.parse_args()
 
@@ -86,6 +96,14 @@ if __name__ == '__main__':
     torch.manual_seed(SEED)
     torch.cuda.manual_seed(SEED)
     torch.cuda.manual_seed_all(SEED)
+
+    log_root = args.log_root
+    log_path = os.path.join(log_root, 'log.txt')
+
+    if check_exists(log_path):
+        os.remove(log_path)
+
+    init_logging(log_path)
 
     main(args)
 

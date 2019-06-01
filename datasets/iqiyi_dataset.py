@@ -24,7 +24,7 @@ from utils import load_face_from_pickle, load_train_gt_from_txt, check_exists, d
     default_scene_feat_remove_noise, default_sep_scene_feat_transforms, default_scene_feat_target_transforms
 
 __all__ = ['IQiYiVidDataset', 'IQiYiIdentityDataset', 'IQiYiFaceDataset', 'IQiYiHeadDataset', 'IQiYiBodyDataset',
-           'IQiYiFaceImageDataset', 'IQiYiExtractSceneDataset', 'IQiYiStackingDataset']
+           'IQiYiFaceImageDataset', 'IQiYiExtractSceneDataset', 'IQiYiStackingDataset', 'IQiYiSceneFeatDataset']
 
 FEAT_PATH = 'feat'
 IMAGE_PATH = 'img'
@@ -782,10 +782,10 @@ class IQiYiSceneFeatDataset(data.Dataset):
 
         if self.tvt == 'train':
             self.feats_path = os.path.join(self.root, SCENE_TRAIN_NAME)
-            self.gt_path = os.path.join(self.root, FEAT_PATH, TRAIN_GT_NAME)
+            self.gt_path = os.path.join(self.root, TRAIN_GT_NAME)
         elif self.tvt == 'val':
             self.feats_path = os.path.join(self.root, SCENE_VAL_NAME)
-            self.gt_path = os.path.join(self.root, FEAT_PATH, VAL_GT_NAME)
+            self.gt_path = os.path.join(self.root, VAL_GT_NAME)
         elif self.tvt == 'train+val' or self.tvt == 'train+val-noise':
             self.train_feats_path = os.path.join(self.root, SCENE_TRAIN_NAME)
             self.val_feats_path = os.path.join(self.root, SCENE_VAL_NAME)
@@ -807,14 +807,14 @@ class IQiYiSceneFeatDataset(data.Dataset):
             gt_labels = load_val_gt_from_txt(self.gt_path)
         elif self.tvt == 'train+val' or self.tvt == 'train+noise' or self.tvt == 'train+val-noise':
             scene_infos = {}
-            scene_infos.update(load_train_gt_from_txt(self.train_feats_path))
-            scene_infos.update(load_train_gt_from_txt(self.val_feats_path))
+            scene_infos.update(load_scene_infos(self.train_feats_path))
+            scene_infos.update(load_scene_infos(self.val_feats_path))
 
             gt_labels = {}
             gt_labels.update(load_train_gt_from_txt(self.train_gt_path))
             gt_labels.update(load_val_gt_from_txt(self.val_gt_path))
         else:
-            scene_infos = load_body_from_pickle(self.feats_path)
+            scene_infos = load_scene_infos(self.feats_path)
             gt_labels = {}
 
         self.frame_infos, self.labels, self.video_names \

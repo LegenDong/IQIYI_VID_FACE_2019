@@ -18,7 +18,8 @@ from .se_resnet import se_resnet50
 
 __all__ = ['BaseModel', 'ArcFaceModel', 'ArcFaceMaxOutModel', 'ArcFaceMultiModalModel', 'ArcFaceNanModel',
            'ArcFaceNanMaxOutModel', 'ArcFaceVLADModel', 'ArcFaceSimpleModel', 'ArcFaceSEResNetModel',
-           'ArcFaceSEResNeXtModel', 'ArcFaceSubModel', 'ArcFaceMultiModalNanModel', 'DenseNetModel']
+           'ArcFaceSEResNeXtModel', 'ArcFaceSubModel', 'ArcFaceMultiModalNanModel', 'DenseNetModel',
+           'ArcSceneFeatNanModel', ]
 
 SENET_PATH = './model_zoo/senet50_vggface2.pth'
 SENEXT_PATH = './model_zoo/se_resnext50_32x4d-a260b3a4.pth'
@@ -371,6 +372,8 @@ class ArcFaceNanMaxOutModel(nn.Module):
         self.object_classes = out_features - 1
         self.stuff_labels = stuff_labels
 
+        self.multi_modal_attention_layer = MultiModalAttentionLayer(40)
+
         self.fc = nn.Sequential(nn.Linear(self.in_features, self.in_features * 2),
                                 nn.BatchNorm1d(self.in_features * 2),
                                 nn.PReLU(),
@@ -392,6 +395,7 @@ class ArcFaceNanMaxOutModel(nn.Module):
         nn.init.xavier_uniform_(self.stuff_weight)
 
     def forward(self, feats):
+        feats = self.multi_modal_attention_layer(feats)
         x = self.nan_layer(feats)
         output = self.fc(x)
         output = x + output
@@ -494,4 +498,43 @@ class DenseNetModel(nn.Module):
             output = F.linear(F.normalize(output), F.normalize(self.weight))
         else:
             output = F.avg_pool2d(output, kernel_size=7, stride=1).view(output.size(0), -1)
+        return output
+
+
+class ArcSceneFeatNanModel(nn.Module):
+    def __init__(self, in_features, out_features, num_attn=1, num_frame=10):
+        super(ArcSceneFeatNanModel, self).__init__()
+        self.in_features = in_features
+        self.out_features = out_features
+        self.num_attn = num_attn
+        self.num_frame = num_frame
+
+        self.multi_modal_attention_layer = MultiModalAttentionLayer(self.num_frame)
+        self.nan_layer = NanAttentionLayer(self.in_features, self.num_attn)
+
+        self.fc = nn.Sequential(nn.Linear(self.in_features, self.in_features * 2),
+                                nn.BatchNorm1d(self.in_features * 2),
+                                nn.PReLU(),
+                                nn.Dropout(),
+                                nn.Linear(self.in_features * 2, self.in_features),
+                                nn.BatchNorm1d(self.in_features),
+                                nn.PReLU(),
+                                )
+
+        nn.init.kaiming_normal_(self.fc[0].weight)
+        nn.init.constant_(self.fc[0].bias, .0)
+        nn.init.kaiming_normal_(self.fc[4].weight)
+        nn.init.constant_(self.fc[4].bias, .0)
+
+        self.weight = Parameter(torch.FloatTensor(self.out_features, self.in_features))
+        nn.init.xavier_uniform_(self.weight)
+
+    def forward(self, feats):
+        feats = self.multi_modal_attention_layer(feats)
+        x = self.nan_layer(feats)
+
+        output = self.fc(x)
+        output = x + output
+        output = F.linear(F.normalize(output), F.normalize(self.weight))
+
         return output

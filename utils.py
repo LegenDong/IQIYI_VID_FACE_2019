@@ -25,7 +25,7 @@ __all__ = ['init_logging', 'check_exists', 'load_train_gt_from_txt', 'load_val_g
            'default_scene_transforms', 'default_scene_target_transforms', 'default_scene_remove_noise_in_val',
            'sep_cat_qds_select_vid_transforms', 'merge_multi_view_result', 'get_mask_index', 'load_scene_infos',
            'default_scene_feat_pre_progress', 'default_scene_feat_remove_noise', 'default_sep_scene_feat_transforms',
-           'default_scene_feat_target_transforms']
+           'default_scene_feat_target_transforms', 'split_name_by_l2norm']
 
 LOG_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
 logger = logging.getLogger(__name__)
@@ -680,7 +680,6 @@ def load_face_from_pickle(file_path):
         for ind, face_feat in enumerate(face_feats):
             [frame_str, bbox, det_score, quality_score, feat] = face_feat
             [x1, y1, x2, y2] = bbox
-            # print(frame_str)
             assert (int(frame_str) >= last_fame_num)
             last_fame_num = int(frame_str)
             assert (0 <= x1 <= x2)
@@ -832,7 +831,7 @@ def default_scene_feat_pre_progress(scene_infos, gt_infos, **kwargs):
     all_labels = []
     all_video_names = []
 
-    for video_name, frame_infos in scene_infos:
+    for video_name, frame_infos in scene_infos.items():
         all_labels.append(gt_infos.get(video_name, 0))
         all_frame_infos.append(frame_infos)
         all_video_names.append(video_name)
@@ -854,12 +853,7 @@ def default_scene_feat_remove_noise(frame_infos, labels, video_names, **kwargs):
     return frame_infos, labels, video_names
 
 
-def default_sep_scene_feat_transforms(frame_infos, num_frame=15, **kwargs):
-    if len(frame_infos) < num_frame:
-        frame_infos = np.random.choice(frame_infos, num_frame, replace=True)
-    else:
-        frame_infos = np.random.choice(frame_infos, num_frame, replace=False)
-
+def default_sep_scene_feat_transforms(frame_infos, **kwargs):
     temp_feats = []
     for frame_info in frame_infos:
         temp_feats.append(frame_info[1])
@@ -873,3 +867,32 @@ def default_scene_feat_target_transforms(label, **kwargs):
     label_np = np.array(label)
     label_torch = torch.from_numpy(label_np).long()
     return label_torch
+
+
+def split_name_by_l2norm(file_path, split_points):
+    if not isinstance(split_points, list):
+        if isinstance(split_points, tuple):
+            split_points = list(split_points)
+        else:
+            split_points = [split_points]
+    split_points.sort()
+    split_names = [[] for _ in range(len(split_points) + 1)]
+    video_infos = load_face_from_pickle(file_path)
+
+    for video_info in video_infos:
+        feat_list = []
+        frame_infos = video_info['frame_infos']
+        if len(frame_infos) == 0:
+            split_names[0].append(video_info['video_name'])
+            continue
+        for frame_info in frame_infos:
+            feat_list.append(frame_info['feat'])
+        feats_np = np.array(feat_list)
+        norm_value = np.mean(np.linalg.norm(feats_np, axis=1))
+        for split_idx, split_point in enumerate(split_points):
+            if norm_value < split_point:
+                split_names[split_idx + 1].append(video_info['video_name'])
+                break
+    logger.info('split data set by {} over.'.format(' '.join([str(point) for point in split_points])))
+
+    return split_names

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+python -u demo_extract_scene.py --tvt test
+python -u demo_test_scene_feat.py
 python -u demo_test_multi_view.py --seed 0 --device 0
 python -u demo_test_multi_view.py --seed 1 --device 0
 python -u demo_test_multi_view.py --seed 2 --device 0
