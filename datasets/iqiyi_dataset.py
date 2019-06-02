@@ -21,10 +21,12 @@ from utils import load_face_from_pickle, load_train_gt_from_txt, check_exists, d
     default_image_pre_progress, default_image_transforms, default_image_target_transforms, \
     default_image_remove_noise_in_val, default_scene_pre_progress, default_scene_transforms, \
     default_scene_target_transforms, crop_image, load_scene_infos, default_scene_feat_pre_progress, \
-    default_scene_feat_remove_noise, default_sep_scene_feat_transforms, default_scene_feat_target_transforms
+    default_scene_feat_remove_noise, default_sep_scene_feat_transforms, default_scene_feat_target_transforms, \
+    default_fine_tune_pre_progress, default_fine_tune_transforms, default_fine_tune_target_transforms
 
 __all__ = ['IQiYiVidDataset', 'IQiYiIdentityDataset', 'IQiYiFaceDataset', 'IQiYiHeadDataset', 'IQiYiBodyDataset',
-           'IQiYiFaceImageDataset', 'IQiYiExtractSceneDataset', 'IQiYiStackingDataset', 'IQiYiSceneFeatDataset']
+           'IQiYiFaceImageDataset', 'IQiYiExtractSceneDataset', 'IQiYiStackingDataset', 'IQiYiSceneFeatDataset',
+           'IQiYiFineTuneSceneDataset']
 
 FEAT_PATH = 'feat'
 IMAGE_PATH = 'img'
@@ -836,6 +838,104 @@ class IQiYiSceneFeatDataset(data.Dataset):
         label = self.target_transform(label, **self.kwargs)
 
         return feat, label, video_name
+
+    def __len__(self):
+        return self.length
+
+
+class IQiYiFineTuneSceneDataset(data.Dataset):
+    def __init__(self, root, tvt='train', transform=None, target_transform=None, pre_progress=None, image_root=None,
+                 **kwargs):
+        assert check_exists(root)
+        assert tvt in ['train', 'val-noise', 'train+val-noise']
+
+        self.root = os.path.expanduser(root)
+        self.tvt = tvt
+        self.transform = transform
+        self.target_transform = target_transform
+        self.pre_progress = pre_progress
+        self.kwargs = kwargs
+        self.image_root = os.path.join(self.root, IMAGE_PATH) \
+            if (image_root is None or not check_exists(image_root)) else image_root
+
+        self.augm_func_train = transforms.Compose([
+            transforms.Resize((256, 256)),
+            transforms.RandomCrop((224, 224)),
+            transforms.RandomHorizontalFlip(p=0.5),
+            transforms.ColorJitter(brightness=0.4, saturation=0.4, hue=0.4),
+            transforms.RandomGrayscale(p=0.2),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ])
+
+        self.augm_func_val = transforms.Compose([
+            transforms.Resize((224, 224)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ])
+
+        self.is_val = False
+
+        if self.pre_progress is None:
+            self.pre_progress = default_fine_tune_pre_progress
+        else:
+            assert 'fine_tune' in pre_progress.__name__.lower()
+        if self.transform is None:
+            self.transform = default_fine_tune_transforms
+        else:
+            assert 'fine_tune' in transform.__name__.lower()
+        if self.target_transform is None:
+            self.target_transform = default_fine_tune_target_transforms
+        else:
+            assert 'fine_tune' in target_transform.__name__.lower()
+
+        if self.tvt == 'train':
+            self.gt_path = os.path.join(self.root, FEAT_PATH, TRAIN_GT_NAME)
+        elif self.tvt == 'val-noise':
+            self.gt_path = os.path.join(self.root, FEAT_PATH, VAL_GT_NAME)
+        elif self.tvt == 'train+val-noise':
+            self.train_gt_path = os.path.join(self.root, TRAIN_GT_NAME)
+            self.val_gt_path = os.path.join(self.root, VAL_GT_NAME)
+
+        self._init_feat_labels()
+
+    def _init_feat_labels(self):
+
+        if self.tvt == 'train':
+            gt_infos = load_train_gt_from_txt(self.gt_path)
+        elif self.tvt == 'val-noise':
+            gt_infos = load_val_gt_from_txt(self.gt_path)
+        elif self.tvt == 'train+val-noise':
+            gt_infos = {}
+            gt_infos.update(load_train_gt_from_txt(self.train_gt_path))
+            gt_infos.update(load_val_gt_from_txt(self.val_gt_path))
+        else:
+            raise RuntimeError
+
+        self.image_paths, self.labels, self.video_names \
+            = self.pre_progress(gt_infos, self.image_root, **self.kwargs)
+        self.length = len(self.image_paths)
+
+        assert len(self.image_paths) == len(self.labels)
+        assert len(self.labels) == len(self.video_names)
+
+    def set_val(self, is_val):
+        assert isinstance(is_val, bool)
+        self.is_val = is_val
+
+    def __getitem__(self, index):
+        image_paths = self.image_paths[index]
+        label = self.labels[index]
+        video_name = self.video_names[index]
+        image_data_list = []
+        for image_path in image_paths:
+            image_data = Image.open(image_path).convert('RGB')
+            image_data = self.transform(image_data, self.augm_func_val if self.is_val else self.augm_func_train)
+            image_data_list.append(image_data.view(1, *image_data.size()))
+        images_data = torch.cat(image_data_list, dim=0)
+        label = self.target_transform(label)
+
+        return images_data, label, video_name
 
     def __len__(self):
         return self.length

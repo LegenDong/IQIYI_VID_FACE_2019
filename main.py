@@ -18,8 +18,8 @@ from utils import init_logging, merge_multi_view_result, split_name_by_l2norm, c
 logger = logging.getLogger(__name__)
 
 FACE_TEST_NAME = 'face_test.pickle'
-SPLIT_POINTS = (8.867, 11.992, 14.509, 16.359)
-BALANCE_WEIGHT = ((0., 0.9), (0.2, 0.8), (0.4, 0.6), (0.6, 0.4), (0.8, 0.2))
+SPLIT_POINTS = (8.867, 11.992,)
+BALANCE_WEIGHT = ((0., 1.), (0.2, 0.8), (0.4, 0.6),)
 
 
 def main():

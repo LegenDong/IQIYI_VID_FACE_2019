@@ -25,7 +25,8 @@ __all__ = ['init_logging', 'check_exists', 'load_train_gt_from_txt', 'load_val_g
            'default_scene_transforms', 'default_scene_target_transforms', 'default_scene_remove_noise_in_val',
            'sep_cat_qds_select_vid_transforms', 'merge_multi_view_result', 'get_mask_index', 'load_scene_infos',
            'default_scene_feat_pre_progress', 'default_scene_feat_remove_noise', 'default_sep_scene_feat_transforms',
-           'default_scene_feat_target_transforms', 'split_name_by_l2norm']
+           'default_scene_feat_target_transforms', 'split_name_by_l2norm', 'default_fine_tune_pre_progress',
+           'default_fine_tune_transforms', 'default_fine_tune_target_transforms', 'adjust_learning_rate']
 
 LOG_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
 logger = logging.getLogger(__name__)
@@ -897,3 +898,38 @@ def split_name_by_l2norm(file_path, split_points):
     logger.info('split data set by {} over.'.format(' '.join([str(point) for point in split_points])))
 
     return split_names
+
+
+def default_fine_tune_pre_progress(gt_infos, image_root, **kwargs):
+    image_paths = []
+    labels = []
+    video_names = []
+
+    for video_name, label in gt_infos.items():
+        video_root = os.path.join(image_root, video_name, )
+        image_list = os.listdir(video_root)
+
+        temp_list = [os.path.join(video_root, image_list[idx])
+                     for idx in [0, len(image_list) // 2, len(image_list) - 1]]
+        image_paths.append(temp_list)
+        labels.append(label)
+        video_names.append(video_name)
+
+    return image_paths, labels, video_names
+
+
+def default_fine_tune_transforms(image_data, augm_func, **kwargs):
+    image_data = augm_func(image_data)
+    return image_data
+
+
+def default_fine_tune_target_transforms(label, **kwargs):
+    label_np = np.array(label)
+    label_torch = torch.from_numpy(label_np).long()
+    return label_torch
+
+
+def adjust_learning_rate(optimizer, epoch_idx, warm_up_epochs, learning_rate):
+    lr = learning_rate * (epoch_idx + 1) / (warm_up_epochs + 1)
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = lr
