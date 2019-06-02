@@ -242,14 +242,14 @@ def default_image_pre_progress(video_infos, gt_infos, image_root, **kwargs):
     return file_paths, labels, video_names, bboxes, frame_ids
 
 
-def default_scene_pre_progress(tvt, image_root, num_frame=10, **kwargs):
+def default_scene_pre_progress(tvt, image_root, num_frame=10, candidate_names=None, **kwargs):
     image_paths = []
     video_names = []
     image_indexes = []
 
     all_video_names = os.listdir(image_root)
     for video_name in all_video_names:
-        if tvt in video_name.lower():
+        if tvt in video_name.lower() and (candidate_names is None or video_name in candidate_names):
             video_image_root = os.path.join(image_root, video_name)
             all_image_names = os.listdir(video_image_root)
             for float_idx in np.linspace(1, len(all_image_names), num_frame, endpoint=True):

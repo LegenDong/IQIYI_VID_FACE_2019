@@ -77,7 +77,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_attn', default=1, type=int, help='number of attention block in NAN')
     parser.add_argument('--moda', default='face', type=str, help='modal[face, head] of model train, (default: face)')
     parser.add_argument('--epoch', type=int, default=100, help="the epoch num for train (default: 100)")
-    parser.add_argument('--seed', type=int, default=3, help="random seed for multi view (default: 0)")
+    parser.add_argument('--seed', type=int, default=0, help="random seed for multi view (default: 0)")
 
     args = parser.parse_args()
 

@@ -16,8 +16,9 @@ import torch
 from torch.utils.data import DataLoader
 
 from datasets import IQiYiExtractSceneDataset
+from main import FACE_TEST_NAME, SPLIT_POINTS
 from models import DenseNetModel
-from utils import check_exists, init_logging
+from utils import check_exists, init_logging, split_name_by_l2norm
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,16 @@ def main(args):
     if not check_exists(args.save_dir):
         os.makedirs(args.save_dir)
 
-    dataset = IQiYiExtractSceneDataset(args.data_root, args.tvt, image_root='/home/dcq/img', num_frame=10)
+    if args.tvt == 'test':
+        split_names = split_name_by_l2norm(os.path.join('/data/materials', 'feat', FACE_TEST_NAME), SPLIT_POINTS)
+        candidate_names = []
+        for split in split_names:
+            candidate_names += split
+    else:
+        candidate_names = None
+
+    dataset = IQiYiExtractSceneDataset(args.data_root, args.tvt, image_root='/home/dcq/img',
+                                       candidate_names=candidate_names, num_frame=10)
     logger.info('the size of the dataset for extract scene feat is {}'.format(len(dataset)))
     data_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=False, num_workers=0, pin_memory=True)
 
@@ -82,7 +92,7 @@ if __name__ == '__main__':
     parser.add_argument('--device', default=None, type=str, help='indices of GPUs to enable (default: all)')
     parser.add_argument('--num_classes', default=10035, type=int, help='number of classes (default: 10035)')
     parser.add_argument('--batch_size', default=512, type=int, help='bat of feature (default: 512)')
-    parser.add_argument('--tvt', default='train', type=str, help='train, val or test to extract feat (default: train)')
+    parser.add_argument('--tvt', default='test', type=str, help='train, val or test to extract feat (default: train)')
 
     args = parser.parse_args()
 

@@ -37,21 +37,27 @@ def main():
         temp_output = all_outputs[name_idx]
         for split_idx, split in enumerate(split_names):
             if video_name in split:
-                balance_weight = BALANCE_WEIGHT[split_idx]
-                scene_output = torch.from_numpy(name_output_dict[video_name])
-                temp_output = temp_output * balance_weight[0] + scene_output * balance_weight[1]
-                logger.info('video {} use scene output to calc by weight ({})'
-                            .format(video_name, ', '.join([str(weight) for weight in balance_weight])))
+                if video_name in name_output_dict:
+                    balance_weight = BALANCE_WEIGHT[split_idx]
+                    scene_output = torch.from_numpy(name_output_dict[video_name])
+                    temp_output = temp_output * balance_weight[0] + scene_output * balance_weight[1]
+                    logger.info('video {} use scene output to calc by weight ({})'
+                                .format(video_name, ', '.join([str(weight) for weight in balance_weight])))
+                else:
+                    logger.warning('video {} should in name_output_dict but not'.format(video_name))
         new_all_outputs.append(temp_output.view(1, -1))
         new_all_video_names.append(video_name)
     for video_name in split_names[0]:
-        balance_weight = BALANCE_WEIGHT[0]
-        scene_output = torch.from_numpy(name_output_dict[video_name])
-        temp_output = scene_output * balance_weight[1]
-        logger.info('video {} use scene output to calc by weight ({})'
-                    .format(video_name, ', '.join([str(weight) for weight in balance_weight])))
-        new_all_outputs.append(temp_output.view(1, -1))
-        new_all_video_names.append(video_name)
+        if video_name in name_output_dict:
+            balance_weight = BALANCE_WEIGHT[0]
+            scene_output = torch.from_numpy(name_output_dict[video_name])
+            temp_output = scene_output * balance_weight[1]
+            logger.info('video {} use scene output to calc by weight ({})'
+                        .format(video_name, ', '.join([str(weight) for weight in balance_weight])))
+            new_all_outputs.append(temp_output.view(1, -1))
+            new_all_video_names.append(video_name)
+        else:
+            logger.warning('video {} should in name_output_dict but not'.format(video_name))
 
     new_all_outputs = torch.cat(new_all_outputs, dim=0)
 
