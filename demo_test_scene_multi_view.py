@@ -1,38 +1,46 @@
 # -*- coding: utf-8 -*-
-# @Time    : 2019/5/27 10:19
+# @Time    : 2019/6/3 16:00
 # @Author  : LegenDong
 # @User    : legendong
-# @File    : demo_test_maxout_nan.py
+# @File    : demo_test_scene_multi_view.py
 # @Software: PyCharm
 import argparse
 import logging
 import os
-import random
+import pickle
 
-import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
-from datasets import IQiYiVidDataset
-from models import ArcFaceNanMaxOutModel
-from utils import check_exists, init_logging, sep_cat_qds_vid_transforms
+from datasets import IQiYiSceneFeatDataset
+from models import ArcFaceNanModel
+from utils import check_exists, init_logging, default_sep_select_scene_feat_transforms
 
 logger = logging.getLogger(__name__)
 
 
-def main(data_root, num_frame, num_attn, moda, stuff_labels, epoch):
-    load_path = './checkpoints/demo_arcface_{}_{:0>6d}_nan_maxout_model_{:0>4d}.pth' \
-        .format(moda, stuff_labels, epoch)
-    assert check_exists(load_path)
+def main(data_root, num_attn, seed, epoch):
+    mask_path = './checkpoints/multi_view_scene/scene_mask_index_file_{}.pickle'.format(seed)
+    assert check_exists(mask_path)
 
-    dataset = IQiYiVidDataset(data_root, 'test', moda, transform=sep_cat_qds_vid_transforms, num_frame=num_frame)
-    data_loader = DataLoader(dataset, batch_size=2048, shuffle=False, num_workers=0)
+    with open(mask_path, 'rb') as fin:
+        mask_index = pickle.load(fin, encoding='bytes')
+    print('=' * 10)
+    print(seed)
 
-    model = ArcFaceNanMaxOutModel(512 + 2, 10034 + 1, num_attn=num_attn, stuff_labels=stuff_labels)
+    model_path = './checkpoints/multi_view_scene/demo_arcface_scene_multi_view_{}_model_{:0>4d}.pth'.format(seed, epoch)
+    assert check_exists(model_path)
+
+    dataset = IQiYiSceneFeatDataset(data_root, 'test', mask_index=mask_index,
+                                    transform=default_sep_select_scene_feat_transforms)
+
+    data_loader = DataLoader(dataset, batch_size=4096, shuffle=False, num_workers=0)
+
+    model = ArcFaceNanModel(len(mask_index), 10034 + 1, num_attn=num_attn)
     metric_func = torch.nn.Softmax(-1)
 
-    logger.info('load model from {}'.format(load_path))
-    state_dict = torch.load(load_path, map_location='cpu')
+    logger.info('load model from {}'.format(model_path))
+    state_dict = torch.load(model_path, map_location='cpu')
     model.load_state_dict(state_dict)
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -60,8 +68,8 @@ def main(data_root, num_frame, num_attn, moda, stuff_labels, epoch):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='PyTorch Template')
-    parser.add_argument('--data_root', default='/data/materials/', type=str,
-                        help='path to load data (default: /data/materials/)')
+    parser.add_argument('--data_root', default='./scene_feat/', type=str,
+                        help='path to load data (default: ./scene_feat/)')
     parser.add_argument('--device', default=None, type=str, help='indices of GPUs to enable (default: all)')
     parser.add_argument('--log_root', default='/data/logs/', type=str,
                         help='path to save log (default: /data/logs/)')
@@ -69,20 +77,13 @@ if __name__ == '__main__':
                         help='path to save result (default: /data/result/)')
     parser.add_argument('--num_frame', default=40, type=int, help='size of video length (default: 40)')
     parser.add_argument('--num_attn', default=1, type=int, help='number of attention block in NAN')
-    parser.add_argument('--moda', default='face', type=str, help='modal[face, head] of model train, (default: face)')
     parser.add_argument('--epoch', type=int, default=100, help="the epoch num for train (default: 100)")
-    parser.add_argument('--stuff_labels', default=1000, type=int, help='stuff num for maxout model (default: 1000)')
+    parser.add_argument('--seed', type=int, default=0, help="random seed for multi view (default: 0)")
 
     args = parser.parse_args()
 
     if args.device:
         os.environ["CUDA_VISIBLE_DEVICES"] = args.device
-
-    SEED = 0
-    random.seed(SEED)
-    np.random.seed(SEED)
-    torch.manual_seed(SEED)
-    torch.cuda.manual_seed(SEED)
 
     log_root = args.log_root
     result_root = args.result_root
@@ -100,8 +101,11 @@ if __name__ == '__main__':
 
     init_logging(log_path)
 
-    all_outputs, all_video_names = main(args.data_root, args.num_frame, args.num_attn, args.moda, args.stuff_labels,
-                                        args.epoch)
+    all_outputs, all_video_names = main(args.data_root, args.num_attn, args.seed, args.epoch)
+
+    pickle_file_data = (1, all_video_names, all_outputs)
+    with open('./multi_view_scene_result/multi_view_scene_{}.pickle'.format(args.seed), 'wb') as fout:
+        pickle.dump(pickle_file_data, fout)
 
     # top100_value, top100_idxes = torch.topk(all_outputs, 100, dim=0)
     # with open(result_log_path, 'w', encoding='utf-8') as f_result_log:

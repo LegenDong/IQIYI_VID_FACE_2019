@@ -8,6 +8,7 @@ import logging
 import os
 import pickle
 import random
+import uuid
 
 import numpy as np
 import torch
@@ -26,7 +27,8 @@ __all__ = ['init_logging', 'check_exists', 'load_train_gt_from_txt', 'load_val_g
            'sep_cat_qds_select_vid_transforms', 'merge_multi_view_result', 'get_mask_index', 'load_scene_infos',
            'default_scene_feat_pre_progress', 'default_scene_feat_remove_noise', 'default_sep_scene_feat_transforms',
            'default_scene_feat_target_transforms', 'split_name_by_l2norm', 'default_fine_tune_pre_progress',
-           'default_fine_tune_transforms', 'default_fine_tune_target_transforms', 'adjust_learning_rate']
+           'default_fine_tune_transforms', 'default_fine_tune_target_transforms', 'adjust_learning_rate',
+           'default_sep_select_scene_feat_transforms']
 
 LOG_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
 logger = logging.getLogger(__name__)
@@ -788,23 +790,36 @@ def load_audio_from_pickle(file_path):
     return video_infos
 
 
-def merge_multi_view_result(result_root):
-    output_list = os.listdir(os.path.join(result_root, 'output'))
-    name_list = os.listdir(os.path.join(result_root, 'name'))
+def merge_multi_view_result(result_root, is_save=True):
+    assert check_exists(result_root)
+    pickle_name_list = os.listdir(result_root)
 
-    logger.info('load name list from {}'.format(name_list[0]))
+    output_num = 0
+    last_name_list = None
+    output_sum = .0
+    for pickle_name in pickle_name_list:
+        logger.info('load pickle file from {}'.format(pickle_name))
+        load_path = os.path.join(result_root, pickle_name)
+        if check_exists(load_path):
+            with open(os.path.join(result_root, pickle_name), 'rb') as fin:
+                pickle_file_data = pickle.load(fin, encoding='bytes')
+                output_num += pickle_file_data[0]
+                output_sum += pickle_file_data[2]
+                if last_name_list is not None and last_name_list != pickle_file_data[1]:
+                    logger.warning('the name list in {} is different from before'.format(pickle_name))
+                else:
+                    last_name_list = pickle_file_data[1]
+            os.remove(load_path)
 
-    with open(os.path.join(result_root, 'name', name_list[0]), 'rb') as fin:
-        all_video_names = pickle.load(fin, encoding='bytes')
-    all_outputs = .0
-    for output_name in output_list:
-        logger.info('load output file from {}'.format(output_name))
+    pickle_file_data = (output_num, last_name_list, output_sum)
 
-        with open(os.path.join(result_root, 'output', output_name), 'rb') as fin:
-            all_outputs += pickle.load(fin, encoding='bytes')
-    all_outputs = torch.from_numpy(all_outputs / len(output_list))
+    if is_save:
+        save_name = 'multi_view_face_{}.pickle'.format(uuid.uuid1())
+        logger.info('save pickle {} in {} with output num is {}'.format(save_name, result_root, output_num))
+        with open(os.path.join(result_root, save_name), 'wb') as fout:
+            pickle.dump(pickle_file_data, fout)
 
-    return all_outputs, all_video_names
+    return pickle_file_data
 
 
 def get_mask_index(seed, feat_length, split_num):
@@ -859,6 +874,18 @@ def default_sep_scene_feat_transforms(frame_infos, **kwargs):
     temp_feats = []
     for frame_info in frame_infos:
         temp_feats.append(frame_info[1])
+
+    feats = torch.from_numpy(np.array(temp_feats)).float()
+
+    return feats
+
+
+def default_sep_select_scene_feat_transforms(frame_infos, mask_index=None, **kwargs):
+    temp_feats = []
+
+    for frame_info in frame_infos:
+        temp_feat = frame_info[1][mask_index]
+        temp_feats.append(temp_feat)
 
     feats = torch.from_numpy(np.array(temp_feats)).float()
 

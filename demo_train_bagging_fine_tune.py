@@ -92,7 +92,7 @@ def main(args):
 
     dataset = IQiYiFineTuneSceneDataset(args.data_root, 'train+val-noise', image_root='/home/dcq/img')
     train_loader = BaseDataLoader(dataset, batch_size=args.batch_size, shuffle=True,
-                                  validation_split=0.1, num_workers=4)
+                                  validation_split=0.1, num_workers=16)
     val_loader = train_loader.split_validation()
 
     train_log_step = len(train_loader) // 10 if len(train_loader) > 10 else 1
@@ -103,7 +103,8 @@ def main(args):
 
     trainable_params = [
         {'params': model.base_model.parameters(), "lr": args.learning_rate / 100},
-        {'params': model.weight}
+        {'params': model.fc.parameters()},
+        {'params': model.weight},
     ]
 
     warm_up_epoch = math.ceil(0.1 * args.epoch)
@@ -130,8 +131,8 @@ def main(args):
         for key, value in sorted(test_log.items(), key=lambda item: item[0]):
             print('    {:20s}: {:6f}'.format(str(key), value))
 
-        if epoch_idx % args.save_interval == 0 and epoch_idx != 0:
-            save_model(model, args.save_dir, 'test_model', epoch_idx, is_best=False)
+        # if epoch_idx % args.save_interval == 0 and epoch_idx != 0:
+        #     save_model(model, args.save_dir, 'test_model', epoch_idx, is_best=False)
 
         test_acc = test_log['top1 acc']
         if max_test_acc < test_acc:

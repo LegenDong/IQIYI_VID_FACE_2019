@@ -300,10 +300,11 @@ class ArcFaceSEResNetModel(nn.Module):
 
 
 class ArcFaceSEResNeXtModel(nn.Module):
-    def __init__(self, num_classes=1000, ):
+    def __init__(self, num_classes=1000, include_top=True):
         super(ArcFaceSEResNeXtModel, self).__init__()
         self.num_classes = num_classes
         self.model_path = SENEXT_PATH
+        self.include_top = include_top
 
         self._init_modules()
 
@@ -317,16 +318,29 @@ class ArcFaceSEResNeXtModel(nn.Module):
         self.base_model = nn.Sequential(se_resnext.layer0, se_resnext.layer1,
                                         se_resnext.layer2, se_resnext.layer3,
                                         se_resnext.layer4, )
+
         self.global_avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.weight = Parameter(torch.FloatTensor(self.num_classes, 2048))
+
+        self.fc = nn.Sequential(nn.Linear(2048, 4096),
+                                nn.ReLU(inplace=True),
+                                nn.Dropout(),
+                                nn.Linear(4096, 4096),
+                                nn.ReLU(inplace=True),
+                                nn.Dropout(), )
+        nn.init.kaiming_normal_(self.fc[0].weight)
+        nn.init.kaiming_normal_(self.fc[3].weight)
+
+        self.weight = Parameter(torch.FloatTensor(self.num_classes, 4096))
         nn.init.xavier_uniform_(self.weight)
 
     def forward(self, x):
         output = self.base_model(x)
         output = self.global_avgpool(output)
         output = output.view(output.size(0), -1)
-        output = F.linear(F.normalize(output), F.normalize(self.weight))
 
+        if self.include_top:
+            output = self.fc(output)
+            output = F.linear(F.normalize(output), F.normalize(self.weight))
         return output
 
 

@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# @Time    : 2019/5/30 10:41
+# @Time    : 2019/6/3 12:17
 # @Author  : LegenDong
 # @User    : legendong
-# @File    : demo_train_multi_view.py
+# @File    : demo_train_scene_multi_view.py
 # @Software: PyCharm
 import argparse
 import os
@@ -14,9 +14,9 @@ import torch
 from torch import optim
 from torch.utils.data import DataLoader
 
-from datasets import IQiYiVidDataset
-from models import ArcFaceNanModel, FocalLoss, ArcMarginProduct
-from utils import check_exists, save_model, sep_cat_qds_select_vid_transforms, get_mask_index
+from datasets import IQiYiSceneFeatDataset
+from models import FocalLoss, ArcMarginProduct, ArcSceneFeatNanModel
+from utils import check_exists, save_model, get_mask_index, default_sep_select_scene_feat_transforms
 
 
 def main(args):
@@ -25,20 +25,20 @@ def main(args):
 
     model_id = args.seed
 
-    assert args.moda in ['face', 'head']
-    mask_index = get_mask_index(args.seed, 512, 32)
+    mask_index = get_mask_index(args.seed, args.feat_dim, 32)
     print(mask_index)
 
-    with open(os.path.join(args.save_dir, 'mask_index_file_{}.pickle'.format(model_id)), 'wb') as fout:
+    with open(os.path.join(args.save_dir, 'scene_mask_index_file_{}.pickle'.format(model_id)), 'wb') as fout:
         pickle.dump(mask_index, fout)
 
-    dataset = IQiYiVidDataset(args.data_root, 'train+val-noise', args.moda, transform=sep_cat_qds_select_vid_transforms,
-                              mask_index=mask_index, num_frame=args.num_frame, )
+    dataset = IQiYiSceneFeatDataset(args.data_root, 'train+val-noise', mask_index=mask_index,
+                                    transform=default_sep_select_scene_feat_transforms)
+
     data_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
 
     log_step = len(data_loader) // 10 if len(data_loader) > 10 else 1
 
-    model = ArcFaceNanModel(args.feat_dim, args.num_classes, num_attn=args.num_attn)
+    model = ArcSceneFeatNanModel(len(mask_index), args.num_classes, num_attn=args.num_attn)
     metric_func = ArcMarginProduct()
     loss_func = FocalLoss(gamma=2.)
 
@@ -78,24 +78,23 @@ def main(args):
 
         lr_scheduler.step()
 
-    save_model(model, args.save_dir, 'demo_arcface_{}_multi_view_{}_model'.format(args.moda, model_id), args.epoch)
+    save_model(model, args.save_dir, 'demo_arcface_scene_multi_view_{}_model'.format(args.moda, model_id), args.epoch)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='PyTorch Template')
-    parser.add_argument('--data_root', default='/data/materials', type=str,
-                        help='path to load data (default: /data/materials/)')
-    parser.add_argument('--save_dir', default='./checkpoints/multi_view_face', type=str,
-                        help='path to save model (default: ./checkpoints/multi_view/multi_view_face)')
+    parser.add_argument('--data_root', default='./scene_feat/', type=str,
+                        help='path to load data (default: ./scene_feat/)')
+    parser.add_argument('--save_dir', default='./checkpoints/multi_view_scene', type=str,
+                        help='path to save model (default: ./checkpoints/multi_view_scene)')
     parser.add_argument('--epoch', type=int, default=100, help="the epoch num for train (default: 100)")
     parser.add_argument('--device', default=None, type=str, help='indices of GPUs to enable (default: all)')
     parser.add_argument('--num_classes', default=10035, type=int, help='number of classes (default: 10035)')
     parser.add_argument('--batch_size', default=4096, type=int, help='dim of feature (default: 4096)')
-    parser.add_argument('--feat_dim', default=496 + 2, type=int, help='dim of feature (default: 496 + 2)')
+    parser.add_argument('--feat_dim', default=2048, type=int, help='dim of feature (default: 2048)')
     parser.add_argument('--learning_rate', type=float, default=0.1, help="learning rate for model (default: 0.1)")
-    parser.add_argument('--num_frame', default=40, type=int, help='size of video length (default: 40)')
+    parser.add_argument('--num_frame', default=20, type=int, help='size of video length (default: 20)')
     parser.add_argument('--num_attn', default=1, type=int, help='number of attention block in NAN')
-    parser.add_argument('--moda', default='face', type=str, help='modal[face, head] of model train, (default: face)')
     parser.add_argument('--seed', default=0, type=int, help='seed for all random module (default: 0)')
 
     args = parser.parse_args()
