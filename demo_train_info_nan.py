@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
-# @Time    : 2019/5/11 18:20
-# @Author  : LegenDong
-# @User    : legendong
-# @File    : demo_train_mm.py
+# @Time    : 2019-05-29 21:57
+# @Author  : edward
+# @File    : demo_train_info_nan.py
 # @Software: PyCharm
 import argparse
 import os
@@ -14,21 +13,28 @@ from torch import optim
 from torch.utils.data import DataLoader
 
 from datasets import IQiYiVidDataset
-from models import FocalLoss, ArcMarginProduct, ArcFaceMultiModalNanModel
-from utils import check_exists, save_model, sep_cat_qds_vid_transforms
+from models import ArcFaceNanModel, FocalLoss, ArcMarginProduct
+from utils import check_exists, save_model, info_vid_pre_progress, sep_cat_info_vid_transforms
 
 
 def main(args):
     if not check_exists(args.save_dir):
         os.makedirs(args.save_dir)
 
-    dataset = IQiYiVidDataset(args.data_root, 'train', modes='face+head', transform=sep_cat_qds_vid_transforms,
-                              num_frame=40)
+    assert args.moda in ['face', 'head']
+
+    dataset = IQiYiVidDataset(args.data_root, 'train', args.moda,
+                              transform=sep_cat_info_vid_transforms,
+                              num_frame=args.num_frame,
+                              pre_progress=info_vid_pre_progress,
+                              meta_info=args.meta_info,
+                              use_meta=True
+                              )
     data_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
 
     log_step = len(data_loader) // 10 if len(data_loader) > 10 else 1
 
-    model = ArcFaceMultiModalNanModel(args.feat_dim, args.num_classes)
+    model = ArcFaceNanModel(args.feat_dim, args.num_classes, num_attn=args.num_attn)
     metric_func = ArcMarginProduct()
     loss_func = FocalLoss(gamma=2.)
 
@@ -40,15 +46,13 @@ def main(args):
 
     for epoch_idx in range(args.epoch):
         total_loss = .0
-        for batch_idx, (feats1, feats2, labels, _) in enumerate(data_loader):
-
-            feats1 = feats1.to(device)
-            feats2 = feats2.to(device)
+        for batch_idx, (feats, labels, _) in enumerate(data_loader):
+            feats = feats.to(device)
             labels = labels.to(device)
 
             optimizer.zero_grad()
 
-            outputs = model(feats1, feats2)
+            outputs = model(feats)
             outputs_metric = metric_func(outputs, labels)
             local_loss = loss_func(outputs_metric, labels)
 
@@ -70,11 +74,11 @@ def main(args):
 
         lr_scheduler.step()
 
-    save_model(model, args.save_dir, 'demo_arcface_face+head_model', args.epoch)
+    save_model(model, args.save_dir, 'demo_arcface_{}_nan_model'.format(args.moda), args.epoch)
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='IQIYI VID FACE 2019')
+    parser = argparse.ArgumentParser(description='PyTorch Template')
     parser.add_argument('--data_root', default='/data/materials', type=str,
                         help='path to load data (default: /data/materials/)')
     parser.add_argument('--save_dir', default='./checkpoints/', type=str,
@@ -83,8 +87,15 @@ if __name__ == '__main__':
     parser.add_argument('--device', default=None, type=str, help='indices of GPUs to enable (default: all)')
     parser.add_argument('--num_classes', default=10035, type=int, help='number of classes (default: 10035)')
     parser.add_argument('--batch_size', default=4096, type=int, help='dim of feature (default: 4096)')
-    parser.add_argument('--feat_dim', default=514, type=int, help='dim of feature (default: 514)')
+    parser.add_argument('--feat_dim', default=512 + 2 + 1 + 3, type=int, help='dim of feature (default: 512 + 2)')
     parser.add_argument('--learning_rate', type=float, default=0.1, help="learning rate for model (default: 0.1)")
+    parser.add_argument('--num_frame', default=40, type=int, help='size of video length (default: 40)')
+    parser.add_argument('--num_attn', default=1, type=int, help='number of attention block in NAN')
+    parser.add_argument('--moda', default='face', type=str, help='modal[face, head] of model train, (default: face)')
+    parser.add_argument('--aug_num_vid', default=5, type=int, help='rate of augment for video, (default: 1.0)')
+    parser.add_argument('--aug_num_frame', default=30, type=int, help='number of frame in aug video, (default: 50)')
+    parser.add_argument('--face_q_threshold', default=15, type=int, help='threshold for quality score, (default: 15)')
+    parser.add_argument('--meta_info', default='train', type=str, help='')
 
     args = parser.parse_args()
 

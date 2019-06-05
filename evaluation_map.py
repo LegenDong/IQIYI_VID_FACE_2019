@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+import argparse
+
+
 def calculate_map(gt_path, my_path):
     id2videos = dict()
     with open(gt_path, 'r') as fin:
@@ -40,6 +43,12 @@ def calculate_map(gt_path, my_path):
 
 
 if __name__ == '__main__':
+
+    parser = argparse.ArgumentParser(description='PyTorch Template')
+    parser.add_argument('--result_root', default=None, type=str,
+                        help='path to load result')
+    args = parser.parse_args()
+
     gt_val_path = '/data/materials/val_gt.txt'
-    my_val_path = '/data/result/result.txt'
+    my_val_path = args.result_root
     print('mAP: {}'.format(calculate_map(gt_val_path, my_val_path)))

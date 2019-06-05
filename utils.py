@@ -9,6 +9,7 @@ import os
 import pickle
 import random
 import uuid
+import cv2
 
 import numpy as np
 import torch
@@ -28,7 +29,8 @@ __all__ = ['init_logging', 'check_exists', 'load_train_gt_from_txt', 'load_val_g
            'default_scene_feat_pre_progress', 'default_scene_feat_remove_noise', 'default_sep_scene_feat_transforms',
            'default_scene_feat_target_transforms', 'split_name_by_l2norm', 'default_fine_tune_pre_progress',
            'default_fine_tune_transforms', 'default_fine_tune_target_transforms', 'adjust_learning_rate',
-           'default_sep_select_scene_feat_transforms']
+           'default_sep_select_scene_feat_transforms', 'info_vid_pre_progress', 'clamp_vid_pre_progress',
+           'sep_cat_qds_mixup_vid_transforms', 'sep_cat_info_vid_transforms']
 
 LOG_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
 logger = logging.getLogger(__name__)
@@ -290,6 +292,89 @@ def default_vid_pre_progress(video_infos, gt_infos, **kwargs):
     return list(vid_infos.values())
 
 
+def info_vid_pre_progress(video_infos, gt_infos, meta_info, root='/data/materials/video/', **kwargs):
+    print('info_vid_pre_process: not complete, better not use it?!')
+    exit()
+    vid_infos = {}
+    for key, values in video_infos.items():
+        for value in values:
+            frame_infos = value['frame_infos']
+            if len(frame_infos) > 0:
+                vid_infos.setdefault(value['video_name'], {})[key] = frame_infos
+    to_dels = []
+    for key, value in vid_infos.items():
+        if len(value.keys()) == len(video_infos.keys()):
+            vid_infos[key]['label'] = gt_infos.get(key, 0)
+            vid_infos[key]['video_name'] = key
+        elif len(value.keys()) < len(video_infos.keys()):
+            to_dels.append(key)
+        elif len(value.keys()) > len(video_infos.keys()):
+            logger.error('the vid {} has wrong num of the moda {}'.format(key, ' '.join(value.keys())))
+    for to_del in to_dels:
+        del vid_infos[to_del]
+
+    meta_root = '/data/materials/feat/meta_info_{}.pickle'.format(meta_info)
+    print(meta_root)
+
+    if check_exists(meta_root):
+        print('meta file exits')
+        with open(meta_root, 'rb') as f:
+            meta_infos = pickle.load(f)
+        f.close()
+
+        for key, value in vid_infos.items():
+            meta_info = meta_infos[key]
+            vid_infos[key]['fps'] = meta_info['fps']
+            vid_infos[key]['width'] = meta_info['width']
+            vid_infos[key]['height'] = meta_info['height']
+    else:
+        print('meta file does not exit')
+        meta_infos = {}
+
+        for key, value in vid_infos.items():
+            vid_path = os.path.join(root, key + '.mp4')
+            cap = cv2.VideoCapture(vid_path)
+            fps = int(round(cap.get(cv2.CAP_PROP_FPS)))
+            width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+            vid_infos[key]['fps'] = fps
+            vid_infos[key]['width'] = width
+            vid_infos[key]['height'] = height
+
+            meta_info = {}
+            meta_info['fps'] = fps
+            meta_info['width'] = width
+            meta_info['height'] = height
+            meta_infos[key] = meta_info
+
+            cap.release()
+
+        print('saving meta file')
+        with open(meta_root, 'wb') as f:
+            pickle.dump(meta_infos, f)
+        f.close()
+
+    return list(vid_infos.values())
+
+
+def clamp_vid_pre_progress(video_infos, gt_infos, face_l2_threshold=15, face_d_shreshold=0.9, **kwargs):
+    vid_infos = default_vid_pre_progress(video_infos, gt_infos)
+    print(len(vid_infos))
+    to_dels = []
+    for index, vid_info in enumerate(vid_infos):
+        if 'face' in vid_info.keys():
+            frames = vid_info['face']
+            vid_info['face'] = [frame for frame in frames if np.linalg.norm(frame['feat']) >= face_l2_threshold \
+                                and frame['det_score'] >= face_d_shreshold]
+            if len(vid_info['face']) == 0:
+                to_dels.append(index)
+    for to_del in sorted(to_dels, reverse=True):
+        del vid_infos[to_del]
+    print(len(vid_infos))
+    return vid_infos
+
+
 def aug_vid_pre_progress(video_infos, gt_infos, aug_num_vid=10, aug_num_frame=50, only_train=True, **kwargs):
     assert aug_num_vid >= 0
     vid_infos = {}
@@ -529,6 +614,83 @@ def sep_cat_qds_select_vid_transforms(vid_info, modes, num_frame=15, mask_index=
             temp_feat = np.append(temp_feat, frames_info['det_score'])
             temp_feats.append(temp_feat)
         feats = np.array(temp_feats)
+        result.append(torch.from_numpy(feats).float())
+    return result
+
+
+def sep_cat_info_vid_transforms(vid_info, modes, num_frame=15,
+                                q_norm_value=100., use_meta=False, w_norm=1000., h_norm=1000., **kwargs):
+    result = []
+    for mode in modes:
+        vid_fps = vid_info['fps']
+        vid_width = vid_info['width']
+        vid_height = vid_info['height']
+        frames_infos = vid_info[mode]
+        if len(frames_infos) < num_frame:
+            frames_infos = np.random.choice(frames_infos, num_frame, replace=True)
+        else:
+            frames_infos = np.random.choice(frames_infos, num_frame, replace=False)
+        temp_feats = []
+        for frame_info in frames_infos:
+            feat = frame_info['feat']
+            if use_meta:
+                feat = np.append(feat, vid_fps)
+                feat = np.append(feat, vid_width / w_norm)
+                feat = np.append(feat, vid_height / h_norm)
+
+            if mode == 'face':
+                feat = np.append(feat, frame_info['quality_score'] / q_norm_value)
+                [x1, y1, x2, y2] = frame_info['bbox']
+                bbox_rate = ((x1 - x2) * (y1 - y2)) / (vid_width * vid_height)
+                feat = np.append(feat, bbox_rate)
+            else:
+                feat = np.append(feat, frame_info['det_score'])
+
+            feat = np.append(feat, frame_info['det_score'])
+            temp_feats.append(feat)
+        feats = np.array(temp_feats)
+        result.append(torch.from_numpy(feats).float())
+    return result
+
+
+def sep_cat_qds_mixup_vid_transforms(vid_info, modes, num_frame=15, norm_value=100., mixup_rate=0.5, **kwargs):
+    result = []
+    for mode in modes:
+        frames_infos = vid_info[mode]
+        if len(frames_infos) < num_frame:
+            frames_infos = np.random.choice(frames_infos, num_frame, replace=True)
+        else:
+            frames_infos = np.random.choice(frames_infos, num_frame, replace=False)
+        temp_feats = []
+        for frame_info in frames_infos:
+            feat = frame_info['feat']
+            if mode == 'face':
+                feat = np.append(feat, frame_info['quality_score'] / norm_value)
+            else:
+                feat = np.append(feat, frame_info['det_score'])
+            feat = np.append(feat, frame_info['det_score'])
+            temp_feats.append(feat)
+        feats1 = np.array(temp_feats)
+
+        frames_infos = vid_info[mode]
+        if len(frames_infos) < num_frame:
+            frames_infos = np.random.choice(frames_infos, num_frame, replace=True)
+        else:
+            frames_infos = np.random.choice(frames_infos, num_frame, replace=False)
+        temp_feats = []
+        for frame_info in frames_infos:
+            feat = frame_info['feat']
+            if mode == 'face':
+                feat = np.append(feat, frame_info['quality_score'] / norm_value)
+            else:
+                feat = np.append(feat, frame_info['det_score'])
+            feat = np.append(feat, frame_info['det_score'])
+            temp_feats.append(feat)
+        feats2 = np.array(temp_feats)
+
+        l = np.random.beta(mixup_rate, mixup_rate)
+        feats = l * feats1 + (1 - l) * feats2
+
         result.append(torch.from_numpy(feats).float())
     return result
 
