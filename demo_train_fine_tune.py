@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
-# @Time    : 2019-05-29 21:57
-# @Author  : edward
-# @File    : demo_train_info_nan.py
+# @Time    : 2019/6/5 11:44
+# @Author  : LegenDong
+# @User    : legendong
+# @File    : demo_train_fine_tune.py
 # @Software: PyCharm
 import argparse
 import os
@@ -12,47 +13,50 @@ import torch
 from torch import optim
 from torch.utils.data import DataLoader
 
-from datasets import IQiYiVidDataset
-from models import ArcFaceNanModel, FocalLoss, ArcMarginProduct
-from utils import check_exists, save_model, info_vid_pre_progress, sep_cat_info_vid_transforms
+from datasets import IQiYiFineTuneSceneDataset
+from models import FocalLoss, ArcMarginProduct, ArcFaceSEResNeXtModel
+from utils import check_exists, save_model, prepare_device
 
 
 def main(args):
     if not check_exists(args.save_dir):
         os.makedirs(args.save_dir)
 
-    assert args.moda in ['face', 'head']
+    dataset = IQiYiFineTuneSceneDataset(args.data_root, 'train+val-noise', image_root='/home/dcq/img')
 
-    dataset = IQiYiVidDataset(args.data_root, 'train', args.moda,
-                              transform=sep_cat_info_vid_transforms,
-                              num_frame=args.num_frame,
-                              pre_progress=info_vid_pre_progress,
-                              meta_info=args.meta_info,
-                              use_meta=True
-                              )
     data_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
 
     log_step = len(data_loader) // 10 if len(data_loader) > 10 else 1
 
-    model = ArcFaceNanModel(args.feat_dim, args.num_classes, num_attn=args.num_attn)
+    model = ArcFaceSEResNeXtModel(args.num_classes, include_top=True)
     metric_func = ArcMarginProduct()
     loss_func = FocalLoss(gamma=2.)
 
-    optimizer = optim.SGD(model.parameters(), lr=args.learning_rate, momentum=0.9, weight_decay=1e-5)
+    trainable_params = [
+        {'params': model.base_model.parameters(), "lr": args.learning_rate / 100},
+        {'params': model.weight},
+    ]
+
+    optimizer = optim.SGD(trainable_params, lr=args.learning_rate, momentum=0.9, weight_decay=1e-5)
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.epoch)
 
-    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    device, device_ids = prepare_device()
     model = model.to(device)
+    if len(device_ids) > 1:
+        model = torch.nn.DataParallel(model, device_ids=device_ids)
 
     for epoch_idx in range(args.epoch):
         total_loss = .0
-        for batch_idx, (feats, labels, _) in enumerate(data_loader):
-            feats = feats.to(device)
+        for batch_idx, (images, labels, _) in enumerate(data_loader):
+            images = images.view(-1, *images.size()[-3:])
+            images = images.to(device)
             labels = labels.to(device)
 
             optimizer.zero_grad()
 
-            outputs = model(feats)
+            outputs = model(images)
+            outputs = outputs.view(outputs.size(0) // 3, 3, -1)
+            outputs = torch.mean(outputs, dim=1)
             outputs_metric = metric_func(outputs, labels)
             local_loss = loss_func(outputs_metric, labels)
 
@@ -74,7 +78,7 @@ def main(args):
 
         lr_scheduler.step()
 
-    save_model(model, args.save_dir, 'demo_arcface_{}_nan_model'.format(args.moda), args.epoch)
+    save_model(model.module, args.save_dir, 'demo_arcface_fine_tune_model', args.epoch)
 
 
 if __name__ == '__main__':
@@ -83,20 +87,11 @@ if __name__ == '__main__':
                         help='path to load data (default: /data/materials/)')
     parser.add_argument('--save_dir', default='./checkpoints/', type=str,
                         help='path to save model (default: ./checkpoints/)')
-    parser.add_argument('--epoch', type=int, default=100, help="the epoch num for train (default: 100)")
+    parser.add_argument('--epoch', type=int, default=30, help="the epoch num for train (default: 30)")
     parser.add_argument('--device', default=None, type=str, help='indices of GPUs to enable (default: all)')
     parser.add_argument('--num_classes', default=10035, type=int, help='number of classes (default: 10035)')
-    parser.add_argument('--batch_size', default=4096, type=int, help='dim of feature (default: 4096)')
-    parser.add_argument('--feat_dim', default=512 + 2 + 1 + 3, type=int, help='dim of feature (default: 512 + 2)')
+    parser.add_argument('--batch_size', default=40, type=int, help='dim of feature (default: 40)')
     parser.add_argument('--learning_rate', type=float, default=0.1, help="learning rate for model (default: 0.1)")
-    parser.add_argument('--num_frame', default=40, type=int, help='size of video length (default: 40)')
-    parser.add_argument('--num_attn', default=1, type=int, help='number of attention block in NAN')
-    parser.add_argument('--moda', default='face', type=str, help='modal[face, head] of model train, (default: face)')
-    parser.add_argument('--aug_num_vid', default=5, type=int, help='rate of augment for video, (default: 1.0)')
-    parser.add_argument('--aug_num_frame', default=30, type=int, help='number of frame in aug video, (default: 50)')
-    parser.add_argument('--face_q_threshold', default=15, type=int, help='threshold for quality score, (default: 15)')
-    parser.add_argument('--meta_info', default='train', type=str, help='')
-
     args = parser.parse_args()
 
     if args.device:

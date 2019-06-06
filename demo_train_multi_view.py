@@ -26,7 +26,7 @@ def main(args):
     model_id = args.seed
 
     assert args.moda in ['face', 'head']
-    mask_index = get_mask_index(args.seed, 512, 32)
+    mask_index = get_mask_index(args.seed, 512, 16)
     print(mask_index)
 
     with open(os.path.join(args.save_dir, 'mask_index_file_{}.pickle'.format(model_id)), 'wb') as fout:
@@ -91,7 +91,7 @@ if __name__ == '__main__':
     parser.add_argument('--device', default=None, type=str, help='indices of GPUs to enable (default: all)')
     parser.add_argument('--num_classes', default=10035, type=int, help='number of classes (default: 10035)')
     parser.add_argument('--batch_size', default=4096, type=int, help='dim of feature (default: 4096)')
-    parser.add_argument('--feat_dim', default=496 + 2, type=int, help='dim of feature (default: 496 + 2)')
+    parser.add_argument('--feat_dim', default=480 + 2, type=int, help='dim of feature (default: 480 + 2)')
     parser.add_argument('--learning_rate', type=float, default=0.1, help="learning rate for model (default: 0.1)")
     parser.add_argument('--num_frame', default=40, type=int, help='size of video length (default: 40)')
     parser.add_argument('--num_attn', default=1, type=int, help='number of attention block in NAN')

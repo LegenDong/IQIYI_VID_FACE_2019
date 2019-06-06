@@ -17,9 +17,6 @@
 #
 # logger = logging.getLogger(__name__)
 #
-# FACE_TEST_NAME = 'face_test.pickle'
-# SPLIT_POINTS = (8.867,)
-# BALANCE_WEIGHT = ((0., 1.), (0.1, 0.9),)
 #
 #
 # def main():
@@ -104,6 +101,10 @@ import demo_test_nan
 from utils import init_logging, merge_multi_view_result
 
 logger = logging.getLogger(__name__)
+
+FACE_TEST_NAME = 'face_test.pickle'
+SPLIT_POINTS = (8.867,)
+BALANCE_WEIGHT = ((0., 1.), (0.1, 0.9),)
 
 
 def main(data_root):

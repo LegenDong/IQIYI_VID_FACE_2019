@@ -78,7 +78,7 @@ if __name__ == '__main__':
                         help='path to load data (default: /data/materials/)')
     parser.add_argument('--save_dir', default='./checkpoints/', type=str,
                         help='path to save model (default: ./checkpoints/)')
-    parser.add_argument('--epoch', type=int, default=200, help="the epoch num for train (default: 100)")
+    parser.add_argument('--epoch', type=int, default=100, help="the epoch num for train (default: 100)")
     parser.add_argument('--device', default=None, type=str, help='indices of GPUs to enable (default: all)')
     parser.add_argument('--num_classes', default=10035, type=int, help='number of classes (default: 10035)')
     parser.add_argument('--batch_size', default=4096, type=int, help='dim of feature (default: 4096)')
@@ -86,7 +86,7 @@ if __name__ == '__main__':
     parser.add_argument('--learning_rate', type=float, default=0.1, help="learning rate for model (default: 0.1)")
     parser.add_argument('--num_frame', default=40, type=int, help='size of video length (default: 40)')
     parser.add_argument('--num_attn', default=1, type=int, help='number of attention block in NAN')
-    parser.add_argument('--moda', default='head', type=str, help='modal[face, head] of model train, (default: face)')
+    parser.add_argument('--moda', default='face', type=str, help='modal[face, head] of model train, (default: face)')
     args = parser.parse_args()
 
     if args.device:

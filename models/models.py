@@ -321,16 +321,7 @@ class ArcFaceSEResNeXtModel(nn.Module):
 
         self.global_avgpool = nn.AdaptiveAvgPool2d((1, 1))
 
-        self.fc = nn.Sequential(nn.Linear(2048, 4096),
-                                nn.ReLU(inplace=True),
-                                nn.Dropout(),
-                                nn.Linear(4096, 4096),
-                                nn.ReLU(inplace=True),
-                                nn.Dropout(), )
-        nn.init.kaiming_normal_(self.fc[0].weight)
-        nn.init.kaiming_normal_(self.fc[3].weight)
-
-        self.weight = Parameter(torch.FloatTensor(self.num_classes, 4096))
+        self.weight = Parameter(torch.FloatTensor(self.num_classes, 2048))
         nn.init.xavier_uniform_(self.weight)
 
     def forward(self, x):
@@ -339,7 +330,6 @@ class ArcFaceSEResNeXtModel(nn.Module):
         output = output.view(output.size(0), -1)
 
         if self.include_top:
-            output = self.fc(output)
             output = F.linear(F.normalize(output), F.normalize(self.weight))
         return output
 
@@ -430,8 +420,8 @@ class ArcFaceMultiModalNanModel(nn.Module):
         self.in_features = in_features
         self.out_features = out_features
 
-        self.nan_layer_1 = NanAttentionLayer(self.in_features, 1)
-        self.nan_layer_2 = NanAttentionLayer(self.in_features, 1)
+        self.nan_layer = NanAttentionLayer(self.in_features, 1)
+        self.mma_layer = MultiModalAttentionLayer(40)
 
         self.balance_weight = Parameter(torch.FloatTensor([0.1]))
         self.sigmoid = nn.Sigmoid()
@@ -453,11 +443,15 @@ class ArcFaceMultiModalNanModel(nn.Module):
         nn.init.xavier_uniform_(self.weight)
 
     def forward(self, feat1, feat2, ):
-        x1 = self.nan_layer_1(feat1)
-        x2 = self.nan_layer_2(feat2)
+        feat2 = (((feat2 - torch.mean(feat2)) / torch.std(feat2))
+                 * torch.std(feat1)) + torch.mean(feat1)
 
         balance_weight = self.sigmoid(self.balance_weight)
-        x = (x1 + x2 * balance_weight) / (1 + balance_weight)
+        feat = (feat1 + feat2 * balance_weight) / (1 + balance_weight)
+
+        feat1 = self.mma_layer(feat)
+
+        x = self.nan_layer(feat1)
 
         output = self.fc(x)
         output = x + output
@@ -468,7 +462,7 @@ class ArcFaceMultiModalNanModel(nn.Module):
 
 
 class DenseNetModel(nn.Module):
-    def __init__(self, num_classes=1000, include_top=False):
+    def __init__(self, num_classes=1000, include_top=True):
         super(DenseNetModel, self).__init__()
         self.num_classes = num_classes
         self.include_top = include_top

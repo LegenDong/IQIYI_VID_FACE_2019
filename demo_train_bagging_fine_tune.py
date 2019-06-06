@@ -5,7 +5,6 @@
 # @File    : demo_train_bagging_fine_tune.py
 # @Software: PyCharm
 import argparse
-import math
 import os
 import random
 import time
@@ -17,7 +16,7 @@ from tqdm import tqdm
 
 from datasets import BaseDataLoader, IQiYiFineTuneSceneDataset
 from models import FocalLoss, ArcMarginProduct, ArcFaceSEResNeXtModel
-from utils import check_exists, topk_func, save_model, prepare_device, adjust_learning_rate
+from utils import check_exists, topk_func, save_model, prepare_device
 
 
 def run_train(epoch_idx, model, train_loader, optimizer, metric_func, loss_func, device, log_step):
@@ -97,19 +96,17 @@ def main(args):
 
     train_log_step = len(train_loader) // 10 if len(train_loader) > 10 else 1
 
-    model = ArcFaceSEResNeXtModel(args.num_classes, )
+    model = ArcFaceSEResNeXtModel(args.num_classes, include_top=True)
     metric_func = ArcMarginProduct()
     loss_func = FocalLoss()
 
     trainable_params = [
         {'params': model.base_model.parameters(), "lr": args.learning_rate / 100},
-        {'params': model.fc.parameters()},
         {'params': model.weight},
     ]
 
-    warm_up_epoch = math.ceil(0.1 * args.epoch)
     optimizer = optim.SGD(trainable_params, lr=args.learning_rate, momentum=0.9, weight_decay=1e-5)
-    lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.epoch - warm_up_epoch)
+    lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.epoch)
 
     device, device_ids = prepare_device()
     model = model.to(device)
@@ -118,10 +115,7 @@ def main(args):
 
     max_test_acc = .0
     for epoch_idx in range(args.epoch):
-        if epoch_idx <= warm_up_epoch:
-            adjust_learning_rate(optimizer, epoch_idx, warm_up_epoch, args.learning_rate)
-        if epoch_idx >= warm_up_epoch:
-            lr_scheduler.step()
+        lr_scheduler.step()
 
         train_log = run_train(epoch_idx, model, train_loader, optimizer, metric_func, loss_func, device, train_log_step)
         for key, value in sorted(train_log.items(), key=lambda item: item[0]):
@@ -159,7 +153,7 @@ if __name__ == '__main__':
     parser.add_argument('--epoch', type=int, default=30, help="the epoch num for train (default: 30)")
     parser.add_argument('--device', default=None, type=str, help='indices of GPUs to enable (default: all)')
     parser.add_argument('--num_classes', default=10035, type=int, help='number of classes (default: 10035)')
-    parser.add_argument('--batch_size', default=40, type=int, help='dim of feature (default: 40)')
+    parser.add_argument('--batch_size', default=36, type=int, help='dim of feature (default: 36)')
     parser.add_argument('--learning_rate', type=float, default=0.1, help="learning rate for model (default: 0.1)")
     parser.add_argument('--save_interval', type=int, default=5, help='save interval in train model (default: 5)')
 
