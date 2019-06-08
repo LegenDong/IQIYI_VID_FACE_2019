@@ -21,12 +21,13 @@ from utils import load_face_from_pickle, load_train_gt_from_txt, check_exists, d
     default_image_pre_progress, default_image_transforms, default_image_target_transforms, \
     default_image_remove_noise_in_val, default_scene_pre_progress, default_scene_transforms, \
     default_scene_target_transforms, crop_image, load_scene_infos, default_scene_feat_pre_progress, \
-    default_scene_feat_remove_noise, default_sep_scene_feat_transforms, default_scene_feat_target_transforms, \
-    default_fine_tune_pre_progress, default_fine_tune_transforms, default_fine_tune_target_transforms
+    default_scene_feat_remove_noise, default_scene_feat_transforms, default_scene_feat_target_transforms, \
+    default_fine_tune_pre_progress, default_fine_tune_transforms, default_fine_tune_target_transforms, \
+    default_face_scene_pre_progress, sep_cat_qds_face_scene_transforms, default_face_scene_remove_noise_in_val
 
 __all__ = ['IQiYiVidDataset', 'IQiYiIdentityDataset', 'IQiYiFaceDataset', 'IQiYiHeadDataset', 'IQiYiBodyDataset',
            'IQiYiFaceImageDataset', 'IQiYiExtractSceneDataset', 'IQiYiStackingDataset', 'IQiYiSceneFeatDataset',
-           'IQiYiFineTuneSceneDataset']
+           'IQiYiFineTuneSceneDataset', 'IQiYiFaceSceneDataset']
 
 FEAT_PATH = 'feat'
 IMAGE_PATH = 'img'
@@ -774,7 +775,7 @@ class IQiYiSceneFeatDataset(data.Dataset):
         else:
             assert 'scene_feat' in pre_progress.__name__.lower()
         if self.transform is None:
-            self.transform = default_sep_scene_feat_transforms
+            self.transform = default_scene_feat_transforms
         else:
             assert 'scene_feat' in transform.__name__.lower()
         if self.target_transform is None:
@@ -934,6 +935,95 @@ class IQiYiFineTuneSceneDataset(data.Dataset):
         label = self.target_transform(label)
 
         return images_data, label, video_name
+
+    def __len__(self):
+        return self.length
+
+
+class IQiYiFaceSceneDataset(data.Dataset):
+    def __init__(self, face_root, scene_root, tvt='train', transform=None, target_transform=None, pre_progress=None,
+                 **kwargs):
+        assert check_exists(face_root)
+        assert check_exists(scene_root)
+        assert tvt in ['train', 'val', 'train+val', 'train+val-noise', 'test', ]
+
+        self.face_root = os.path.expanduser(face_root)
+        self.scene_root = os.path.expanduser(scene_root)
+        self.tvt = tvt
+        self.transform = transform
+        self.target_transform = target_transform
+        self.pre_progress = pre_progress
+        self.kwargs = kwargs
+
+        if self.pre_progress is None:
+            self.pre_progress = default_face_scene_pre_progress
+        if self.transform is None:
+            self.transform = sep_cat_qds_face_scene_transforms
+        if self.target_transform is None:
+            self.target_transform = default_target_transforms
+
+        if self.tvt == 'train':
+            self.face_feats_path = os.path.join(self.face_root, FEAT_PATH, FACE_TRAIN_NAME)
+            self.scene_feats_path = os.path.join(self.scene_root, SCENE_TRAIN_NAME)
+            self.gt_path = os.path.join(self.face_root, TRAIN_GT_NAME)
+        elif self.tvt == 'val':
+            self.face_feats_path = os.path.join(self.face_root, FEAT_PATH, FACE_VAL_NAME)
+            self.scene_feats_path = os.path.join(self.scene_root, SCENE_VAL_NAME)
+            self.gt_path = os.path.join(self.face_root, VAL_GT_NAME)
+        elif self.tvt == 'train+val' or self.tvt == 'train+val-noise':
+            self.train_face_feats_path = os.path.join(self.face_root, FEAT_PATH, FACE_TRAIN_NAME)
+            self.val_face_feats_path = os.path.join(self.face_root, FEAT_PATH, FACE_VAL_NAME)
+            self.train_scene_feats_path = os.path.join(self.scene_root, SCENE_TRAIN_NAME)
+            self.val_scene_feats_path = os.path.join(self.scene_root, SCENE_VAL_NAME)
+            self.train_gt_path = os.path.join(self.face_root, TRAIN_GT_NAME)
+            self.val_gt_path = os.path.join(self.face_root, VAL_GT_NAME)
+        elif self.tvt == 'test':
+            self.face_feats_path = os.path.join(self.face_root, FEAT_PATH, FACE_TEST_NAME)
+            self.scene_feats_path = os.path.join(self.scene_root, SCENE_TEST_NAME)
+            self.gt_path = None
+
+        self._init_feat_labels()
+
+    def _init_feat_labels(self):
+        if self.tvt == 'train':
+            face_feat_info = load_face_from_pickle(self.face_feats_path)
+            scene_feat_info = load_scene_infos(self.scene_feats_path)
+            gt_labels = load_train_gt_from_txt(self.gt_path)
+        elif self.tvt == 'val':
+            face_feat_info = load_face_from_pickle(self.face_feats_path)
+            scene_feat_info = load_scene_infos(self.scene_feats_path)
+            gt_labels = load_val_gt_from_txt(self.gt_path)
+        elif self.tvt == 'train+val' or self.tvt == 'train+val-noise':
+            face_feat_info = []
+            face_feat_info += load_face_from_pickle(self.train_face_feats_path)
+            face_feat_info += load_face_from_pickle(self.val_face_feats_path)
+
+            scene_feat_info = {}
+            scene_feat_info.update(load_scene_infos(self.train_scene_feats_path))
+            scene_feat_info.update(load_scene_infos(self.val_scene_feats_path))
+
+            gt_labels = {}
+            gt_labels.update(load_train_gt_from_txt(self.train_gt_path))
+            gt_labels.update(load_val_gt_from_txt(self.val_gt_path))
+        else:
+            face_feat_info = load_face_from_pickle(self.face_feats_path)
+            scene_feat_info = load_scene_infos(self.scene_feats_path)
+            gt_labels = {}
+
+        self.vid_infos = self.pre_progress(face_feat_info, scene_feat_info, gt_labels, **self.kwargs)
+        if self.tvt == 'train+val-noise':
+            self.vid_infos = default_face_scene_remove_noise_in_val(self.vid_infos, **self.kwargs)
+        self.length = len(self.vid_infos)
+
+    def __getitem__(self, index):
+        vid_info = self.vid_infos[index]
+        label = vid_info['label']
+        video_name = vid_info['video_name']
+
+        face_feat, scene_feat = self.transform(vid_info, **self.kwargs)
+        label = self.target_transform(label, **self.kwargs)
+
+        return face_feat, scene_feat, label, video_name
 
     def __len__(self):
         return self.length

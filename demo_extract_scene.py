@@ -16,9 +16,8 @@ import torch
 from torch.utils.data import DataLoader
 
 from datasets import IQiYiExtractSceneDataset
-from main import FACE_TEST_NAME, SPLIT_POINTS
-from models import DenseNetModel
-from utils import check_exists, init_logging, split_name_by_l2norm
+from models import ArcFaceSEResNeXtModel
+from utils import check_exists, init_logging
 
 logger = logging.getLogger(__name__)
 
@@ -26,25 +25,23 @@ logger = logging.getLogger(__name__)
 def main(args):
     if not check_exists(args.save_dir):
         os.makedirs(args.save_dir)
+    load_path = './checkpoints/demo_arcface_fine_tune_model_{:0>4d}.pth'.format(args.epoch)
 
-    if args.tvt == 'test':
-        split_names = split_name_by_l2norm(os.path.join('/data/materials', 'feat', FACE_TEST_NAME), SPLIT_POINTS)
-        candidate_names = []
-        for split in split_names:
-            candidate_names += split
+    dataset = IQiYiExtractSceneDataset(args.data_root, args.tvt, image_root='/home/dcq/img', num_frame=1)
+    if len(dataset) <= 0:
+        logger.error('the size of the dataset for extract scene feat cannot be {}'.format(len(dataset)))
     else:
-        candidate_names = None
-
-    dataset = IQiYiExtractSceneDataset(args.data_root, args.tvt, image_root='/home/dcq/img',
-                                       candidate_names=candidate_names, num_frame=10)
-    logger.info('the size of the dataset for extract scene feat is {}'.format(len(dataset)))
+        logger.info('the size of the dataset for extract scene feat is {}'.format(len(dataset)))
     data_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=False, num_workers=0, pin_memory=True)
 
     log_step = len(data_loader) // 100 if len(data_loader) > 100 else 1
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     logger.info('extract scene feat on {}'.format(device))
 
-    model = DenseNetModel(args.num_classes, include_top=False)
+    model = ArcFaceSEResNeXtModel(args.num_classes, include_top=False)
+    state_dict = torch.load(load_path, map_location='cpu')
+    model.load_state_dict(state_dict)
+
     model = model.to(device)
 
     all_video_names = []
@@ -93,6 +90,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_classes', default=10035, type=int, help='number of classes (default: 10035)')
     parser.add_argument('--batch_size', default=512, type=int, help='bat of feature (default: 512)')
     parser.add_argument('--tvt', default='test', type=str, help='train, val or test to extract feat (default: train)')
+    parser.add_argument('--epoch', default=20, type=int, help='train, val or test to extract feat (default: train)')
 
     args = parser.parse_args()
 

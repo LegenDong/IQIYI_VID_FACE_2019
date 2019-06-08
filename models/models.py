@@ -19,7 +19,7 @@ from .se_resnet import se_resnet50
 __all__ = ['BaseModel', 'ArcFaceModel', 'ArcFaceMaxOutModel', 'ArcFaceMultiModalModel', 'ArcFaceNanModel',
            'ArcFaceNanMaxOutModel', 'ArcFaceVLADModel', 'ArcFaceSimpleModel', 'ArcFaceSEResNetModel',
            'ArcFaceSEResNeXtModel', 'ArcFaceSubModel', 'ArcFaceMultiModalNanModel', 'DenseNetModel',
-           'ArcSceneFeatNanModel', ]
+           'ArcSceneFeatModel', 'ArcFaceSceneModel']
 
 SENET_PATH = './model_zoo/senet50_vggface2.pth'
 SENEXT_PATH = './model_zoo/se_resnext50_32x4d-a260b3a4.pth'
@@ -420,8 +420,11 @@ class ArcFaceMultiModalNanModel(nn.Module):
         self.in_features = in_features
         self.out_features = out_features
 
-        self.nan_layer = NanAttentionLayer(self.in_features, 1)
-        self.mma_layer = MultiModalAttentionLayer(40)
+        self.nan_layer_1 = NanAttentionLayer(self.in_features, 1)
+        self.nan_layer_2 = NanAttentionLayer(self.in_features, 1)
+
+        self.mma_layer_1 = MultiModalAttentionLayer(40)
+        self.mma_layer_2 = MultiModalAttentionLayer(40)
 
         self.balance_weight = Parameter(torch.FloatTensor([0.1]))
         self.sigmoid = nn.Sigmoid()
@@ -443,15 +446,16 @@ class ArcFaceMultiModalNanModel(nn.Module):
         nn.init.xavier_uniform_(self.weight)
 
     def forward(self, feat1, feat2, ):
-        feat2 = (((feat2 - torch.mean(feat2)) / torch.std(feat2))
-                 * torch.std(feat1)) + torch.mean(feat1)
+        feat1 = self.mma_layer_1(feat1)
+        feat2 = self.mma_layer_2(feat2)
+        x_1 = self.nan_layer_1(feat1)
+        x_2 = self.nan_layer_2(feat2)
+
+        x_2 = (((x_2 - torch.mean(x_2)) / torch.std(x_2))
+               * torch.std(x_1)) + torch.mean(x_1)
 
         balance_weight = self.sigmoid(self.balance_weight)
-        feat = (feat1 + feat2 * balance_weight) / (1 + balance_weight)
-
-        feat1 = self.mma_layer(feat)
-
-        x = self.nan_layer(feat1)
+        x = (x_1 + x_2 * balance_weight) / (1 + balance_weight)
 
         output = self.fc(x)
         output = x + output
@@ -509,16 +513,11 @@ class DenseNetModel(nn.Module):
         return output
 
 
-class ArcSceneFeatNanModel(nn.Module):
-    def __init__(self, in_features, out_features, num_attn=1, num_frame=10):
-        super(ArcSceneFeatNanModel, self).__init__()
+class ArcSceneFeatModel(nn.Module):
+    def __init__(self, in_features, out_features, ):
+        super(ArcSceneFeatModel, self).__init__()
         self.in_features = in_features
         self.out_features = out_features
-        self.num_attn = num_attn
-        self.num_frame = num_frame
-
-        self.multi_modal_attention_layer = MultiModalAttentionLayer(self.num_frame)
-        self.nan_layer = NanAttentionLayer(self.in_features, self.num_attn)
 
         self.fc = nn.Sequential(nn.Linear(self.in_features, self.in_features * 2),
                                 nn.BatchNorm1d(self.in_features * 2),
@@ -537,12 +536,63 @@ class ArcSceneFeatNanModel(nn.Module):
         self.weight = Parameter(torch.FloatTensor(self.out_features, self.in_features))
         nn.init.xavier_uniform_(self.weight)
 
-    def forward(self, feats):
-        feats = self.multi_modal_attention_layer(feats)
-        x = self.nan_layer(feats)
-
+    def forward(self, x):
         output = self.fc(x)
         output = x + output
+        output = F.linear(F.normalize(output), F.normalize(self.weight))
+
+        return output
+
+
+class ArcFaceSceneModel(nn.Module):
+    def __init__(self, face_dim, scene_dim, out_features):
+        super(ArcFaceSceneModel, self).__init__()
+        self.face_dim = face_dim
+        self.scene_dim = scene_dim
+        self.out_features = out_features
+
+        self.mma_layer = MultiModalAttentionLayer(40)
+        self.nan_layer = NanAttentionLayer(self.face_dim, 1)
+
+        self.scene_fc = nn.Sequential(nn.Linear(self.scene_dim, self.scene_dim // 4),
+                                      nn.BatchNorm1d(self.scene_dim // 4),
+                                      nn.PReLU(),
+                                      nn.Dropout(),
+                                      nn.Linear(self.scene_dim // 4, self.scene_dim // 16),
+                                      nn.BatchNorm1d(self.scene_dim // 16),
+                                      nn.PReLU(), )
+
+        nn.init.kaiming_normal_(self.scene_fc[0].weight)
+        nn.init.constant_(self.scene_fc[0].bias, .0)
+        nn.init.kaiming_normal_(self.scene_fc[4].weight)
+        nn.init.constant_(self.scene_fc[4].bias, .0)
+
+        self.final_fc = nn.Sequential(nn.Linear(self.face_dim + self.scene_dim // 16, self.face_dim * 2),
+                                      nn.BatchNorm1d(self.face_dim * 2),
+                                      nn.PReLU(),
+                                      nn.Dropout(),
+                                      nn.Linear(self.face_dim * 2, self.face_dim + self.scene_dim // 16),
+                                      nn.BatchNorm1d(self.face_dim + self.scene_dim // 16),
+                                      nn.PReLU(), )
+
+        nn.init.kaiming_normal_(self.final_fc[0].weight)
+        nn.init.constant_(self.final_fc[0].bias, .0)
+        nn.init.kaiming_normal_(self.final_fc[4].weight)
+        nn.init.constant_(self.final_fc[4].bias, .0)
+
+        self.weight = Parameter(torch.FloatTensor(self.out_features, self.face_dim + self.scene_dim // 16))
+        nn.init.xavier_uniform_(self.weight)
+
+    def forward(self, feat1, feat2, ):
+        feat1 = self.mma_layer(feat1)
+        x_1 = self.nan_layer(feat1)
+        x_2 = self.scene_fc(feat2)
+
+        x = torch.cat([x_1, x_2], dim=-1)
+
+        output = self.final_fc(x)
+        output = x + output
+
         output = F.linear(F.normalize(output), F.normalize(self.weight))
 
         return output

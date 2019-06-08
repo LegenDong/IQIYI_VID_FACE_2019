@@ -15,20 +15,20 @@ import torch
 from torch.utils.data import DataLoader
 
 from datasets import IQiYiSceneFeatDataset
-from models import ArcSceneFeatNanModel
+from models import ArcSceneFeatModel
 from utils import check_exists, init_logging
 
 logger = logging.getLogger(__name__)
 
 
-def main(data_root, num_frame, num_attn, epoch):
+def main(data_root, epoch):
     load_path = './checkpoints/demo_arcface_scene_model_{:0>4d}.pth'.format(epoch)
     assert check_exists(load_path)
 
     dataset = IQiYiSceneFeatDataset(data_root, 'test', )
     data_loader = DataLoader(dataset, batch_size=2048, shuffle=False, num_workers=0)
 
-    model = ArcSceneFeatNanModel(2208, 10034 + 1, num_attn=num_attn, num_frame=num_frame)
+    model = ArcSceneFeatModel(2048, 10034 + 1)
     metric_func = torch.nn.Softmax(-1)
 
     logger.info('load model from {}'.format(load_path))
@@ -67,8 +67,6 @@ if __name__ == '__main__':
                         help='path to save log (default: /data/logs/)')
     parser.add_argument('--result_root', default='/data/result/', type=str,
                         help='path to save result (default: /data/result/)')
-    parser.add_argument('--num_frame', default=10, type=int, help='size of video length (default: 10)')
-    parser.add_argument('--num_attn', default=1, type=int, help='number of attention block in NAN')
     parser.add_argument('--epoch', type=int, default=100, help="the epoch num for train (default: 100)")
 
     args = parser.parse_args()
@@ -91,14 +89,14 @@ if __name__ == '__main__':
 
     init_logging(log_path)
 
-    all_outputs, all_video_names = main(args.data_root, args.num_frame, args.num_attn, args.epoch)
+    all_outputs, all_video_names = main(args.data_root, args.epoch)
     all_outputs_np = all_outputs.numpy()
 
     name_output_dict = {}
     for name_idx, video_name in enumerate(all_video_names):
         name_output_dict[video_name] = all_outputs_np[name_idx]
 
-    with open('./scene_result/name_output_dict.pickle', 'wb') as fout:
+    with open('./scene_result/scene_name_output_dict.pickle', 'wb') as fout:
         pickle.dump(name_output_dict, fout)
 
     # top100_value, top100_idxes = torch.topk(all_outputs, 100, dim=0)

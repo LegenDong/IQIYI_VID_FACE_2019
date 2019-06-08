@@ -15,7 +15,7 @@ from torch import optim
 
 from datasets import BaseDataLoader, IQiYiSceneFeatDataset
 from models import FocalLoss, ArcMarginProduct
-from models.models import ArcSceneFeatNanModel
+from models.models import ArcSceneFeatModel
 from utils import check_exists, topk_func, save_model
 
 
@@ -86,7 +86,7 @@ def main(args):
 
     train_log_step = len(train_loader) // 10 if len(train_loader) > 10 else 1
 
-    model = ArcSceneFeatNanModel(args.feat_dim, args.num_classes, num_frame=args.num_frame)
+    model = ArcSceneFeatModel(args.feat_dim, args.num_classes, )
     metric_func = ArcMarginProduct()
     loss_func = FocalLoss(gamma=2.0)
 
@@ -137,11 +137,9 @@ if __name__ == '__main__':
     parser.add_argument('--device', default=None, type=str, help='indices of GPUs to enable (default: all)')
     parser.add_argument('--num_classes', default=10035, type=int, help='number of classes (default: 10035)')
     parser.add_argument('--batch_size', default=2048, type=int, help='dim of feature (default: 4096)')
-    parser.add_argument('--feat_dim', default=2208, type=int, help='dim of feature (default: 2208)')
+    parser.add_argument('--feat_dim', default=2048, type=int, help='dim of feature (default: 2208)')
     parser.add_argument('--save_interval', default=10, type=int, help='interval of epochs for save model (default: 10)')
     parser.add_argument('--learning_rate', type=float, default=0.1, help="learning rate for model (default: 0.1)")
-    parser.add_argument('--num_frame', default=10, type=int, help='size of video length (default: 10)')
-    parser.add_argument('--num_attn', default=1, type=int, help='number of attention block in NAN')
 
     args = parser.parse_args()
 

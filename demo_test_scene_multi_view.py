@@ -13,13 +13,13 @@ import torch
 from torch.utils.data import DataLoader
 
 from datasets import IQiYiSceneFeatDataset
-from models import ArcFaceNanModel
+from models import ArcSceneFeatModel
 from utils import check_exists, init_logging, default_sep_select_scene_feat_transforms
 
 logger = logging.getLogger(__name__)
 
 
-def main(data_root, num_attn, seed, epoch):
+def main(data_root, seed, epoch):
     mask_path = './checkpoints/multi_view_scene/scene_mask_index_file_{}.pickle'.format(seed)
     assert check_exists(mask_path)
 
@@ -36,7 +36,7 @@ def main(data_root, num_attn, seed, epoch):
 
     data_loader = DataLoader(dataset, batch_size=4096, shuffle=False, num_workers=0)
 
-    model = ArcFaceNanModel(len(mask_index), 10034 + 1, num_attn=num_attn)
+    model = ArcSceneFeatModel(len(mask_index), 10034 + 1)
     metric_func = torch.nn.Softmax(-1)
 
     logger.info('load model from {}'.format(model_path))
@@ -75,8 +75,6 @@ if __name__ == '__main__':
                         help='path to save log (default: /data/logs/)')
     parser.add_argument('--result_root', default='/data/result/', type=str,
                         help='path to save result (default: /data/result/)')
-    parser.add_argument('--num_frame', default=40, type=int, help='size of video length (default: 40)')
-    parser.add_argument('--num_attn', default=1, type=int, help='number of attention block in NAN')
     parser.add_argument('--epoch', type=int, default=100, help="the epoch num for train (default: 100)")
     parser.add_argument('--seed', type=int, default=0, help="random seed for multi view (default: 0)")
 
@@ -101,7 +99,7 @@ if __name__ == '__main__':
 
     init_logging(log_path)
 
-    all_outputs, all_video_names = main(args.data_root, args.num_attn, args.seed, args.epoch)
+    all_outputs, all_video_names = main(args.data_root, args.seed, args.epoch)
 
     pickle_file_data = (1, all_video_names, all_outputs)
     with open('./multi_view_scene_result/multi_view_scene_{}.pickle'.format(args.seed), 'wb') as fout:

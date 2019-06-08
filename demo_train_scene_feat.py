@@ -14,7 +14,7 @@ from torch import optim
 from torch.utils.data import DataLoader
 
 from datasets import IQiYiSceneFeatDataset
-from models import FocalLoss, ArcMarginProduct, ArcSceneFeatNanModel
+from models import FocalLoss, ArcMarginProduct, ArcSceneFeatModel
 from utils import check_exists, save_model
 
 
@@ -27,7 +27,7 @@ def main(args):
 
     log_step = len(data_loader) // 10 if len(data_loader) > 10 else 1
 
-    model = ArcSceneFeatNanModel(args.feat_dim, args.num_classes, num_attn=args.num_attn)
+    model = ArcSceneFeatModel(args.feat_dim, args.num_classes)
     metric_func = ArcMarginProduct()
     loss_func = FocalLoss(gamma=2.)
 
@@ -80,10 +80,8 @@ if __name__ == '__main__':
     parser.add_argument('--device', default=None, type=str, help='indices of GPUs to enable (default: all)')
     parser.add_argument('--num_classes', default=10035, type=int, help='number of classes (default: 10035)')
     parser.add_argument('--batch_size', default=2048, type=int, help='dim of feature (default: 4096)')
-    parser.add_argument('--feat_dim', default=2208, type=int, help='dim of feature (default: 2208)')
+    parser.add_argument('--feat_dim', default=2048, type=int, help='dim of feature (default: 2048)')
     parser.add_argument('--learning_rate', type=float, default=0.1, help="learning rate for model (default: 0.1)")
-    parser.add_argument('--num_frame', default=10, type=int, help='size of video length (default: 10)')
-    parser.add_argument('--num_attn', default=1, type=int, help='number of attention block in NAN')
     args = parser.parse_args()
 
     if args.device:

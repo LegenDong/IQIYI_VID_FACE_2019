@@ -14,7 +14,7 @@ from torch.utils.data import DataLoader
 
 from datasets import IQiYiVidDataset
 from models import ArcFaceNanModel
-from utils import check_exists, init_logging, sep_cat_qds_vid_transforms
+from utils import check_exists, init_logging, sep_cat_qds_vid_transforms, default_get_result
 
 logger = logging.getLogger(__name__)
 
@@ -98,6 +98,23 @@ if __name__ == '__main__':
     init_logging(log_path)
 
     all_outputs, all_video_names = main(args.data_root, args.num_frame, args.num_attn, args.moda, args.epoch)
+
+    all_results = default_get_result(all_outputs, all_video_names)
+
+    results_dict = {}
+    for result in all_results:
+        key = result[0].int().item()
+        if key not in results_dict.keys():
+            results_dict[key] = [(*result[1:],)]
+        else:
+            results_dict[key].append((*result[1:],))
+
+    with open('./old_result.txt', 'w', encoding='utf-8') as f:
+        for key, value in sorted(results_dict.items(), key=lambda item: item[0]):
+            value.sort(key=lambda k: k[0], reverse=True)
+            value = ['{}.mp4'.format(i[1]) for i in value[:100]]
+            video_names_str = ' '.join(value)
+            f.write('{} {}\n'.format(key, video_names_str))
 
     # top100_value, top100_idxes = torch.topk(all_outputs, 100, dim=0)
     # with open(result_log_path, 'w', encoding='utf-8') as f_result_log:

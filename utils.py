@@ -25,10 +25,12 @@ __all__ = ['init_logging', 'check_exists', 'load_train_gt_from_txt', 'load_val_g
            'prepare_device', 'default_image_remove_noise_in_val', 'default_scene_pre_progress', 'aug_vid_pre_progress',
            'default_scene_transforms', 'default_scene_target_transforms', 'default_scene_remove_noise_in_val',
            'sep_cat_qds_select_vid_transforms', 'merge_multi_view_result', 'get_mask_index', 'load_scene_infos',
-           'default_scene_feat_pre_progress', 'default_scene_feat_remove_noise', 'default_sep_scene_feat_transforms',
+           'default_scene_feat_pre_progress', 'default_scene_feat_remove_noise', 'default_scene_feat_transforms',
            'default_scene_feat_target_transforms', 'split_name_by_l2norm', 'default_fine_tune_pre_progress',
            'default_fine_tune_transforms', 'default_fine_tune_target_transforms', 'adjust_learning_rate',
-           'default_sep_select_scene_feat_transforms', 'sep_cat_qds_mixup_vid_transforms', ]
+           'default_sep_select_scene_feat_transforms', 'sep_cat_qds_mixup_vid_transforms',
+           'default_face_scene_remove_noise_in_val', 'default_face_scene_pre_progress',
+           'sep_cat_qds_face_scene_transforms', 'sep_cat_qds_select_face_scene_transforms']
 
 LOG_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
 logger = logging.getLogger(__name__)
@@ -53,7 +55,7 @@ def check_exists(file_paths):
 
     for file_path in file_paths:
         if not os.path.exists(file_path):
-            logger.info('check_exists: {} not exist'.format(file_path))
+            logger.warning('check_exists: {} not exist'.format(file_path))
             return False
     logger.info('check_exists: {} all exist'.format(' '.join(file_paths)))
     return True
@@ -245,14 +247,14 @@ def default_image_pre_progress(video_infos, gt_infos, image_root, **kwargs):
     return file_paths, labels, video_names, bboxes, frame_ids
 
 
-def default_scene_pre_progress(tvt, image_root, num_frame=10, candidate_names=None, **kwargs):
+def default_scene_pre_progress(tvt, image_root, num_frame=1, **kwargs):
     image_paths = []
     video_names = []
     image_indexes = []
 
     all_video_names = os.listdir(image_root)
     for video_name in all_video_names:
-        if tvt in video_name.lower() and (candidate_names is None or video_name in candidate_names):
+        if tvt in video_name.lower():
             video_image_root = os.path.join(image_root, video_name)
             all_image_names = os.listdir(video_image_root)
             for float_idx in np.linspace(1, len(all_image_names), num_frame, endpoint=True):
@@ -852,6 +854,7 @@ def merge_multi_view_result(result_root, is_save=True):
                 else:
                     last_name_list = pickle_file_data[1]
             os.remove(load_path)
+            logger.info('pickle file {} has been removed'.format(pickle_name))
 
     pickle_file_data = (output_num, last_name_list, output_sum)
 
@@ -912,12 +915,12 @@ def default_scene_feat_remove_noise(frame_infos, labels, video_names, **kwargs):
     return frame_infos, labels, video_names
 
 
-def default_sep_scene_feat_transforms(frame_infos, **kwargs):
+def default_scene_feat_transforms(frame_infos, **kwargs):
     temp_feats = []
     for frame_info in frame_infos:
         temp_feats.append(frame_info[1])
 
-    feats = torch.from_numpy(np.array(temp_feats)).float()
+    feats = torch.from_numpy(np.array(temp_feats).reshape(-1)).float()
 
     return feats
 
@@ -929,7 +932,7 @@ def default_sep_select_scene_feat_transforms(frame_infos, mask_index=None, **kwa
         temp_feat = frame_info[1][mask_index]
         temp_feats.append(temp_feat)
 
-    feats = torch.from_numpy(np.array(temp_feats)).float()
+    feats = torch.from_numpy(np.array(temp_feats).reshape(-1)).float()
 
     return feats
 
@@ -1002,3 +1005,85 @@ def adjust_learning_rate(optimizer, epoch_idx, warm_up_epochs, learning_rate):
     lr = learning_rate * (epoch_idx + 1) / (warm_up_epochs + 1)
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
+
+
+def default_face_scene_pre_progress(face_feat_infos, scene_feat_infos, gt_infos, **kwargs):
+    vid_infos = {}
+    for face_feat_info in face_feat_infos:
+        frame_infos = face_feat_info['frame_infos']
+        video_name = face_feat_info['video_name']
+        if len(frame_infos) > 0:
+            vid_infos.setdefault(video_name, {})['face'] = frame_infos
+            vid_infos.setdefault(video_name, {})['scene'] = scene_feat_infos[video_name]
+            vid_infos.setdefault(video_name, {})['label'] = gt_infos.get(video_name, 0)
+            vid_infos.setdefault(video_name, {})['video_name'] = video_name
+    return list(vid_infos.values())
+
+
+def sep_cat_qds_face_scene_transforms(vid_info, num_frame=15, norm_value=100., **kwargs):
+    result = []
+    face_frame_infos = vid_info['face']
+    if len(face_frame_infos) < num_frame:
+        frames_infos = np.random.choice(face_frame_infos, num_frame, replace=True)
+    else:
+        frames_infos = np.random.choice(face_frame_infos, num_frame, replace=False)
+    face_feats = []
+    for frame_info in frames_infos:
+        feat = frame_info['feat']
+        feat = np.append(feat, frame_info['quality_score'] / norm_value)
+        feat = np.append(feat, frame_info['det_score'])
+        face_feats.append(feat)
+    feats = np.array(face_feats)
+    result.append(torch.from_numpy(feats).float())
+
+    scene_frame_infos = vid_info['scene']
+    scene_feats = []
+    for frame_info in scene_frame_infos:
+        temp_feat = frame_info[1]
+        scene_feats.append(temp_feat)
+    feats = np.array(scene_feats).reshape(-1)
+    result.append(torch.from_numpy(feats).float())
+
+    return result
+
+
+def sep_cat_qds_select_face_scene_transforms(vid_info, face_mask=None, scene_mask=None, num_frame=15, norm_value=100.,
+                                             **kwargs):
+    result = []
+    face_frame_infos = vid_info['face']
+    if len(face_frame_infos) < num_frame:
+        frames_infos = np.random.choice(face_frame_infos, num_frame, replace=True)
+    else:
+        frames_infos = np.random.choice(face_frame_infos, num_frame, replace=False)
+    face_feats = []
+    for frame_info in frames_infos:
+        feat = frame_info['feat']
+        if face_mask is not None:
+            feat = feat[face_mask]
+        feat = np.append(feat, frame_info['quality_score'] / norm_value)
+        feat = np.append(feat, frame_info['det_score'])
+        face_feats.append(feat)
+    feats = np.array(face_feats)
+    result.append(torch.from_numpy(feats).float())
+
+    scene_frame_infos = vid_info['scene']
+    scene_feats = []
+    for frame_info in scene_frame_infos:
+        feat = frame_info[1]
+        if scene_mask is not None:
+            feat = feat[scene_mask]
+        scene_feats.append(feat)
+    feats = np.array(scene_feats).reshape(-1)
+    result.append(torch.from_numpy(feats).float())
+
+    return result
+
+
+def default_face_scene_remove_noise_in_val(vid_infos, **kwargs):
+    idx_list = []
+    for idx, vid_info in enumerate(vid_infos):
+        if ('TRAIN' in vid_info['video_name']) \
+                or (vid_info['label'] != 0 and 'VAL' in vid_info['video_name']) \
+                or (vid_info['label'] != 0 and 'AUG' in vid_info['video_name']):
+            idx_list.append(idx)
+    return [vid_infos[idx] for idx in idx_list]

@@ -69,6 +69,7 @@ def main(args):
                 print('Epoch: {} [{}/{} ({:.0f}%)] Loss: {:.6f}'
                       .format(epoch_idx, batch_idx * args.batch_size, len(dataset),
                               100.0 * batch_idx / len(data_loader), local_loss.item()))
+
         log = {'epoch': epoch_idx,
                'lr': optimizer.param_groups[0]['lr'],
                'loss': total_loss / len(data_loader)}
@@ -87,7 +88,7 @@ if __name__ == '__main__':
                         help='path to load data (default: /data/materials/)')
     parser.add_argument('--save_dir', default='./checkpoints/', type=str,
                         help='path to save model (default: ./checkpoints/)')
-    parser.add_argument('--epoch', type=int, default=30, help="the epoch num for train (default: 30)")
+    parser.add_argument('--epoch', type=int, default=20, help="the epoch num for train (default: 30)")
     parser.add_argument('--device', default=None, type=str, help='indices of GPUs to enable (default: all)')
     parser.add_argument('--num_classes', default=10035, type=int, help='number of classes (default: 10035)')
     parser.add_argument('--batch_size', default=40, type=int, help='dim of feature (default: 40)')
