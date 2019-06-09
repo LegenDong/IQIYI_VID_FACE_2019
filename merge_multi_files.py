@@ -12,10 +12,13 @@ from utils import merge_multi_view_result, init_logging
 
 logger = logging.getLogger(__name__)
 
+FACE_PICKLE_ROOT = './multi_view_face_result/'
+SCENE_PICKLE_ROOT = './multi_view_scene_result/'
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='PyTorch Template')
-    parser.add_argument('--pickle_root', default='./multi_view_face_result/', type=str,
-                        help='path to load pickle (default: ./multi_view_face_result/)')
+    parser.add_argument('--merge_type', default='face', type=str,
+                        help='the pickle to merge (default: face)')
     args = parser.parse_args()
 
     log_root = '/data/logs/'
@@ -23,7 +26,15 @@ if __name__ == '__main__':
 
     init_logging(log_path)
 
-    output_num, all_video_names, output_sum = merge_multi_view_result('./multi_view_face_result', is_save=True)
+    assert args.merge_type in ['face', 'scene']
+    if args.merge_type == 'face':
+        pickle_root = FACE_PICKLE_ROOT
+    elif args.merge_type == 'scene':
+        pickle_root = SCENE_PICKLE_ROOT
+    else:
+        raise RuntimeError
+
+    output_num, all_video_names, output_sum = merge_multi_view_result(pickle_root, is_save=True)
 
     # all_outputs = output_sum / output_num
     #

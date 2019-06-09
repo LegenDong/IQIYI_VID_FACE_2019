@@ -23,7 +23,7 @@ def main(args):
 
     assert args.moda in ['face', 'head']
 
-    dataset = IQiYiVidDataset(args.data_root, 'train', args.moda,
+    dataset = IQiYiVidDataset(args.data_root, 'train+val-noise', args.moda,
                               transform=sep_cat_qds_mixup_vid_transforms,
                               num_frame=args.num_frame,
                               pre_progress=aug_vid_pre_progress,

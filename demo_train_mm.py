@@ -22,7 +22,8 @@ def main(args):
     if not check_exists(args.save_dir):
         os.makedirs(args.save_dir)
 
-    dataset = IQiYiVidDataset(args.data_root, 'train', modes='face+head', transform=sep_cat_qds_vid_transforms,
+    dataset = IQiYiVidDataset(args.data_root, 'train+val-noise', modes='face+head',
+                              transform=sep_cat_qds_vid_transforms,
                               num_frame=40)
     data_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
 

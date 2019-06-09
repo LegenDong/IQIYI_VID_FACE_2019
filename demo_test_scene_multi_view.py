@@ -34,7 +34,7 @@ def main(data_root, seed, epoch):
     dataset = IQiYiSceneFeatDataset(data_root, 'test', mask_index=mask_index,
                                     transform=default_sep_select_scene_feat_transforms)
 
-    data_loader = DataLoader(dataset, batch_size=4096, shuffle=False, num_workers=0)
+    data_loader = DataLoader(dataset, batch_size=16384, shuffle=False, num_workers=0)
 
     model = ArcSceneFeatModel(len(mask_index), 10034 + 1)
     metric_func = torch.nn.Softmax(-1)
@@ -90,18 +90,11 @@ if __name__ == '__main__':
     result_path = os.path.join(result_root, 'result.txt')
     log_path = os.path.join(log_root, 'log.txt')
 
-    if check_exists(result_log_path):
-        os.remove(result_log_path)
-    if check_exists(result_path):
-        os.remove(result_path)
-    if check_exists(log_path):
-        os.remove(log_path)
-
     init_logging(log_path)
 
     all_outputs, all_video_names = main(args.data_root, args.seed, args.epoch)
 
-    pickle_file_data = (1, all_video_names, all_outputs)
+    pickle_file_data = (1, all_video_names, all_outputs.numpy())
     with open('./multi_view_scene_result/multi_view_scene_{}.pickle'.format(args.seed), 'wb') as fout:
         pickle.dump(pickle_file_data, fout)
 
