@@ -20,11 +20,11 @@ from utils import check_exists, init_logging
 logger = logging.getLogger(__name__)
 
 
-def main(face_root, scene_root):
+def main(data_root, ):
     load_path = './checkpoints/demo_arcface_face+audio_nan_model_0100.pth'
     assert check_exists(load_path)
 
-    dataset = IQiYiFaceAudioDataset(face_root, scene_root, 'test', num_frame=40, )
+    dataset = IQiYiFaceAudioDataset(data_root, 'test', num_frame=40, )
     data_loader = DataLoader(dataset, batch_size=16384, shuffle=False, num_workers=0)
 
     model = ArcFaceAudioModel(512 + 2, 512, 10034 + 1, )
@@ -60,9 +60,7 @@ def main(face_root, scene_root):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='PyTorch Template')
-    parser.add_argument('--face_root', default='/data/materials', type=str,
-                        help='path to load data (default: /data/materials/)')
-    parser.add_argument('--scene_root', default='./scene_feat', type=str,
+    parser.add_argument('--data_root', default='/data/materials', type=str,
                         help='path to load data (default: /data/materials/)')
     parser.add_argument('--save_dir', default='./checkpoints/', type=str,
                         help='path to save model (default: ./checkpoints/)')
@@ -92,7 +90,7 @@ if __name__ == '__main__':
 
     init_logging(log_path)
 
-    all_outputs, all_video_names = main(args.face_root, args.scene_root)
+    all_outputs, all_video_names = main(args.data_root)
 
     top100_value, top100_idxes = torch.topk(all_outputs, 100, dim=0)
     with open(result_log_path, 'w', encoding='utf-8') as f_result_log:

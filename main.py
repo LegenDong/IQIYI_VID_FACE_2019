@@ -21,7 +21,7 @@ SPLIT_POINTS = (8.867,)
 SCENE_BALANCE_WEIGHT = ((0., 1.), (1., 0.),)
 
 
-# FACE_BALANCE_WEIGHT = (0.5, 0.5)
+# FACE_BALANCE_WEIGHT = (0.8, 0.2)
 
 
 def main():

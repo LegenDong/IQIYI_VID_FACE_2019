@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 FACE_PICKLE_ROOT = './multi_view_face_result/'
 SCENE_PICKLE_ROOT = './multi_view_scene_result/'
 FACE_SCENE_PICKLE_ROOT = './multi_view_face_scene_result/'
+FACE_SCENE_512_PICKLE_ROOT = './multi_view_face_scene_512_result/'
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='PyTorch Template')
@@ -34,6 +35,8 @@ if __name__ == '__main__':
         pickle_root = SCENE_PICKLE_ROOT
     elif args.merge_type == 'face_scene':
         pickle_root = FACE_SCENE_PICKLE_ROOT
+    elif args.merge_type == 'face_scene_512':
+        pickle_root = FACE_SCENE_512_PICKLE_ROOT
     else:
         raise RuntimeError
 
