@@ -14,7 +14,7 @@ from torch import optim
 from torch.utils.data import DataLoader
 
 from datasets import IQiYiFaceSceneDataset
-from models import FocalLoss, ArcMarginProduct, ArcFaceSceneNormModel
+from models import FocalLoss, ArcMarginProduct, ArcFaceScene512Model
 from utils import check_exists, save_model
 
 
@@ -27,7 +27,7 @@ def main(args):
 
     log_step = len(data_loader) // 10 if len(data_loader) > 10 else 1
 
-    model = ArcFaceSceneNormModel(args.face_feat_dim, args.scene_feat_dim, args.num_classes, )
+    model = ArcFaceScene512Model(args.face_feat_dim, args.scene_feat_dim, args.num_classes, )
     metric_func = ArcMarginProduct()
     loss_func = FocalLoss(gamma=2.)
 
@@ -68,7 +68,7 @@ def main(args):
 
         lr_scheduler.step()
 
-    save_model(model, args.save_dir, 'demo_arcface_face+scene_norm_model', args.epoch)
+    save_model(model, args.save_dir, 'demo_arcface_face+scene_512_model', args.epoch)
 
 
 if __name__ == '__main__':

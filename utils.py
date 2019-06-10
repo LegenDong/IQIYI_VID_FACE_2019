@@ -30,7 +30,8 @@ __all__ = ['init_logging', 'check_exists', 'load_train_gt_from_txt', 'load_val_g
            'default_fine_tune_transforms', 'default_fine_tune_target_transforms', 'adjust_learning_rate',
            'default_sep_select_scene_feat_transforms', 'sep_cat_qds_mixup_vid_transforms',
            'default_face_scene_remove_noise_in_val', 'default_face_scene_pre_progress',
-           'sep_cat_qds_face_scene_transforms', 'sep_cat_qds_select_face_scene_transforms']
+           'sep_cat_qds_face_scene_transforms', 'sep_cat_qds_select_face_scene_transforms',
+           'default_face_audio_pre_progress', 'sep_cat_qds_select_face_audio_transforms']
 
 LOG_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
 logger = logging.getLogger(__name__)
@@ -1087,3 +1088,48 @@ def default_face_scene_remove_noise_in_val(vid_infos, **kwargs):
                 or (vid_info['label'] != 0 and 'AUG' in vid_info['video_name']):
             idx_list.append(idx)
     return [vid_infos[idx] for idx in idx_list]
+
+
+def default_face_audio_pre_progress(face_feat_infos, audio_feat_infos, gt_infos, **kwargs):
+    audio_feat_info_dict = {}
+    for audio_feat_info in audio_feat_infos:
+        audio_feat_info_dict[audio_feat_info['video_name']] = audio_feat_info['feat']
+    vid_infos = {}
+    for face_feat_info in face_feat_infos:
+        frame_infos = face_feat_info['frame_infos']
+        video_name = face_feat_info['video_name']
+        if len(frame_infos) > 0:
+            if video_name in audio_feat_info_dict:
+                vid_infos.setdefault(video_name, {})['face'] = frame_infos
+                vid_infos.setdefault(video_name, {})['audio'] = audio_feat_info_dict[video_name]
+                vid_infos.setdefault(video_name, {})['label'] = gt_infos.get(video_name, 0)
+                vid_infos.setdefault(video_name, {})['video_name'] = video_name
+    return list(vid_infos.values())
+
+
+def sep_cat_qds_select_face_audio_transforms(vid_info, face_mask=None, audio_mask=None, num_frame=15, norm_value=100.,
+                                             **kwargs):
+    result = []
+    face_frame_infos = vid_info['face']
+    if len(face_frame_infos) < num_frame:
+        frames_infos = np.random.choice(face_frame_infos, num_frame, replace=True)
+    else:
+        frames_infos = np.random.choice(face_frame_infos, num_frame, replace=False)
+    face_feats = []
+    for frame_info in frames_infos:
+        feat = frame_info['feat']
+        if face_mask is not None:
+            feat = feat[face_mask]
+        feat = np.append(feat, frame_info['quality_score'] / norm_value)
+        feat = np.append(feat, frame_info['det_score'])
+        face_feats.append(feat)
+    feats = np.array(face_feats)
+    result.append(torch.from_numpy(feats).float())
+
+    audio_feat = vid_info['audio']
+    if audio_mask is not None:
+        audio_feat = audio_feat[audio_mask]
+    feats = np.array(audio_feat).reshape(-1)
+    result.append(torch.from_numpy(feats).float())
+
+    return result

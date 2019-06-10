@@ -15,30 +15,30 @@ import torch
 from torch.utils.data import DataLoader
 
 from datasets import IQiYiFaceSceneDataset
-from models import ArcFaceSceneNormModel
+from models import ArcFaceScene512Model
 from utils import check_exists, init_logging, sep_cat_qds_select_face_scene_transforms
 
 logger = logging.getLogger(__name__)
 
 
 def main(face_root, scene_root, seed, epoch):
-    mask_path = './checkpoints/multi_view_face_scene_norm/mask_index_file_{}.pickle'.format(seed)
+    mask_path = './checkpoints/multi_view_face_scene_512/mask_index_file_{}.pickle'.format(seed)
     assert check_exists(mask_path)
 
     with open(mask_path, 'rb') as fin:
         face_mask_index, scene_mask_index = pickle.load(fin, encoding='bytes')
     print(face_mask_index)
     print(scene_mask_index)
-    model_path = './checkpoints/multi_view_face_scene_norm/demo_arcface_face+scene_norm_{}_model_{:0>4d}.pth' \
+    model_path = './checkpoints/multi_view_face_scene_512/demo_arcface_face+scene_norm_{}_model_{:0>4d}.pth' \
         .format(seed, epoch)
     assert check_exists(model_path)
 
     dataset = IQiYiFaceSceneDataset(face_root, scene_root, 'test', num_frame=40,
                                     transform=sep_cat_qds_select_face_scene_transforms, face_mask=face_mask_index,
                                     scene_mask=scene_mask_index)
-    data_loader = DataLoader(dataset, batch_size=16384, shuffle=False, num_workers=4)
+    data_loader = DataLoader(dataset, batch_size=16384, shuffle=False, num_workers=0)
 
-    model = ArcFaceSceneNormModel(len(face_mask_index) + 2, len(scene_mask_index), 10034 + 1, )
+    model = ArcFaceScene512Model(len(face_mask_index) + 2, len(scene_mask_index), 10034 + 1, )
     metric_func = torch.nn.Softmax(-1)
 
     logger.info('load model from {}'.format(model_path))
@@ -83,7 +83,7 @@ if __name__ == '__main__':
                         help='path to save result (default: /data/result/)')
     parser.add_argument('--device', default=None, type=str, help='indices of GPUs to enable (default: all)')
     parser.add_argument('--epoch', type=int, default=100, help="the epoch num for train (default: 100)")
-    parser.add_argument('--seed', type=int, default=9, help="random seed for multi view (default: 0)")
+    parser.add_argument('--seed', type=int, default=0, help="random seed for multi view (default: 0)")
 
     args = parser.parse_args()
 

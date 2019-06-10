@@ -23,11 +23,12 @@ from utils import load_face_from_pickle, load_train_gt_from_txt, check_exists, d
     default_scene_target_transforms, crop_image, load_scene_infos, default_scene_feat_pre_progress, \
     default_scene_feat_remove_noise, default_scene_feat_transforms, default_scene_feat_target_transforms, \
     default_fine_tune_pre_progress, default_fine_tune_transforms, default_fine_tune_target_transforms, \
-    default_face_scene_pre_progress, sep_cat_qds_face_scene_transforms, default_face_scene_remove_noise_in_val
+    default_face_scene_pre_progress, sep_cat_qds_face_scene_transforms, default_face_scene_remove_noise_in_val, \
+    load_audio_from_pickle, default_face_audio_pre_progress, sep_cat_qds_select_face_audio_transforms
 
 __all__ = ['IQiYiVidDataset', 'IQiYiIdentityDataset', 'IQiYiFaceDataset', 'IQiYiHeadDataset', 'IQiYiBodyDataset',
            'IQiYiFaceImageDataset', 'IQiYiExtractSceneDataset', 'IQiYiStackingDataset', 'IQiYiSceneFeatDataset',
-           'IQiYiFineTuneSceneDataset', 'IQiYiFaceSceneDataset']
+           'IQiYiFineTuneSceneDataset', 'IQiYiFaceSceneDataset', 'IQiYiFaceAudioDataset']
 
 FEAT_PATH = 'feat'
 IMAGE_PATH = 'img'
@@ -43,6 +44,10 @@ HEAD_TEST_NAME = 'head_test.pickle'
 BODY_TRAIN_NAME = 'body_train.pickle'
 BODY_VAL_NAME = 'body_val.pickle'
 BODY_TEST_NAME = 'body_test.pickle'
+
+AUDIO_TRAIN_NAME = 'audio_train.pickle'
+AUDIO_VAL_NAME = 'audio_val.pickle'
+AUDIO_TEST_NAME = 'audio_test.pickle'
 
 SCENE_TRAIN_NAME = 'scene_infos_train.pickle'
 SCENE_VAL_NAME = 'scene_infos_val.pickle'
@@ -1024,6 +1029,93 @@ class IQiYiFaceSceneDataset(data.Dataset):
         label = self.target_transform(label, **self.kwargs)
 
         return face_feat, scene_feat, label, video_name
+
+    def __len__(self):
+        return self.length
+
+
+class IQiYiFaceAudioDataset(data.Dataset):
+    def __init__(self, data_root, tvt='train', transform=None, target_transform=None, pre_progress=None,
+                 **kwargs):
+        assert check_exists(data_root)
+        assert tvt in ['train', 'val', 'train+val', 'train+val-noise', 'test', ]
+
+        self.data_root = os.path.expanduser(data_root)
+        self.tvt = tvt
+        self.transform = transform
+        self.target_transform = target_transform
+        self.pre_progress = pre_progress
+        self.kwargs = kwargs
+
+        if self.pre_progress is None:
+            self.pre_progress = default_face_audio_pre_progress
+        if self.transform is None:
+            self.transform = sep_cat_qds_select_face_audio_transforms
+        if self.target_transform is None:
+            self.target_transform = default_target_transforms
+
+        if self.tvt == 'train':
+            self.face_feats_path = os.path.join(self.data_root, FEAT_PATH, FACE_TRAIN_NAME)
+            self.audio_feats_path = os.path.join(self.data_root, FEAT_PATH, AUDIO_TRAIN_NAME)
+            self.gt_path = os.path.join(self.data_root, TRAIN_GT_NAME)
+        elif self.tvt == 'val':
+            self.face_feats_path = os.path.join(self.data_root, FEAT_PATH, FACE_VAL_NAME)
+            self.audio_feats_path = os.path.join(self.data_root, FEAT_PATH, AUDIO_VAL_NAME)
+            self.gt_path = os.path.join(self.data_root, VAL_GT_NAME)
+        elif self.tvt == 'train+val' or self.tvt == 'train+val-noise':
+            self.train_face_feats_path = os.path.join(self.data_root, FEAT_PATH, FACE_TRAIN_NAME)
+            self.val_face_feats_path = os.path.join(self.data_root, FEAT_PATH, FACE_VAL_NAME)
+            self.train_audio_feats_path = os.path.join(self.data_root, FEAT_PATH, AUDIO_TRAIN_NAME)
+            self.val_audio_feats_path = os.path.join(self.data_root, FEAT_PATH, AUDIO_VAL_NAME)
+            self.train_gt_path = os.path.join(self.data_root, TRAIN_GT_NAME)
+            self.val_gt_path = os.path.join(self.data_root, VAL_GT_NAME)
+        elif self.tvt == 'test':
+            self.face_feats_path = os.path.join(self.data_root, FEAT_PATH, FACE_TEST_NAME)
+            self.audio_feats_path = os.path.join(self.data_root, FEAT_PATH, AUDIO_TEST_NAME)
+            self.gt_path = None
+
+        self._init_feat_labels()
+
+    def _init_feat_labels(self):
+        if self.tvt == 'train':
+            face_feat_info = load_face_from_pickle(self.face_feats_path)
+            audio_feat_info = load_audio_from_pickle(self.audio_feats_path)
+            gt_labels = load_train_gt_from_txt(self.gt_path)
+        elif self.tvt == 'val':
+            face_feat_info = load_face_from_pickle(self.face_feats_path)
+            audio_feat_info = load_audio_from_pickle(self.audio_feats_path)
+            gt_labels = load_val_gt_from_txt(self.gt_path)
+        elif self.tvt == 'train+val' or self.tvt == 'train+val-noise':
+            face_feat_info = []
+            face_feat_info += load_face_from_pickle(self.train_face_feats_path)
+            face_feat_info += load_face_from_pickle(self.val_face_feats_path)
+
+            audio_feat_info = []
+            audio_feat_info += load_audio_from_pickle(self.train_audio_feats_path)
+            audio_feat_info += load_audio_from_pickle(self.val_audio_feats_path)
+
+            gt_labels = {}
+            gt_labels.update(load_train_gt_from_txt(self.train_gt_path))
+            gt_labels.update(load_val_gt_from_txt(self.val_gt_path))
+        else:
+            face_feat_info = load_face_from_pickle(self.face_feats_path)
+            audio_feat_info = load_audio_from_pickle(self.audio_feats_path)
+            gt_labels = {}
+
+        self.vid_infos = self.pre_progress(face_feat_info, audio_feat_info, gt_labels, **self.kwargs)
+        if self.tvt == 'train+val-noise':
+            self.vid_infos = default_face_scene_remove_noise_in_val(self.vid_infos, **self.kwargs)
+        self.length = len(self.vid_infos)
+
+    def __getitem__(self, index):
+        vid_info = self.vid_infos[index]
+        label = vid_info['label']
+        video_name = vid_info['video_name']
+
+        face_feat, audio_feat = self.transform(vid_info, **self.kwargs)
+        label = self.target_transform(label, **self.kwargs)
+
+        return face_feat, audio_feat, label, video_name
 
     def __len__(self):
         return self.length

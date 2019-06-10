@@ -12,7 +12,6 @@ import time
 import numpy as np
 import torch
 
-import demo_test_face_scene_norm
 from utils import init_logging, merge_multi_view_result, split_name_by_l2norm
 
 logger = logging.getLogger(__name__)
@@ -36,7 +35,9 @@ def main():
 
     split_names = split_name_by_l2norm(os.path.join('/data/materials', 'feat', FACE_TEST_NAME), SPLIT_POINTS)
 
-    face_scene_outputs, face_scene_video_names = demo_test_face_scene_norm.main('/data/materials', './scene_feat')
+    face_scene_output_num, face_scene_video_names, face_scene_output_sum \
+        = merge_multi_view_result('./multi_view_face_scene_result', is_save=False)
+    face_scene_outputs = torch.from_numpy(face_scene_output_sum / face_scene_output_num)
 
     scene_output_num, scene_video_names, scene_output_sum \
         = merge_multi_view_result('./multi_view_scene_result', is_save=False)

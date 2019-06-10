@@ -1,46 +1,37 @@
 # -*- coding: utf-8 -*-
-# @Time    : 2019/6/9 16:43
+# @Time    : 2019/6/10 12:23
 # @Author  : LegenDong
 # @User    : legendong
-# @File    : demo_test_face_scene_norm_multi_view_only_face.py
+# @File    : demo_test_face_audio.py
 # @Software: PyCharm
 import argparse
 import logging
 import os
-import pickle
 import random
 
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
-from datasets import IQiYiFaceSceneDataset
-from models import ArcFaceSceneNormModel
-from utils import check_exists, init_logging, sep_cat_qds_select_face_scene_transforms
+from datasets import IQiYiFaceAudioDataset
+from models import ArcFaceAudioModel
+from utils import check_exists, init_logging
 
 logger = logging.getLogger(__name__)
 
 
-def main(face_root, scene_root, seed, epoch):
-    mask_path = './checkpoints/multi_view_face_scene_norm_only_face/mask_index_file_{}.pickle'.format(seed)
-    assert check_exists(mask_path)
+def main(face_root, scene_root):
+    load_path = './checkpoints/demo_arcface_face+audio_nan_model_0100.pth'
+    assert check_exists(load_path)
 
-    with open(mask_path, 'rb') as fin:
-        face_mask_index = pickle.load(fin, encoding='bytes')
-    print(face_mask_index)
-    model_path = './checkpoints/multi_view_face_scene_norm_only_face/' \
-                 'demo_arcface_face+scene_norm_only_face_{}_model_{:0>4d}.pth'.format(seed, epoch)
-    assert check_exists(model_path)
-
-    dataset = IQiYiFaceSceneDataset(face_root, scene_root, 'test', num_frame=40,
-                                    transform=sep_cat_qds_select_face_scene_transforms, face_mask=face_mask_index)
+    dataset = IQiYiFaceAudioDataset(face_root, scene_root, 'test', num_frame=40, )
     data_loader = DataLoader(dataset, batch_size=16384, shuffle=False, num_workers=0)
 
-    model = ArcFaceSceneNormModel(len(face_mask_index) + 2, 2048, 10034 + 1, )
+    model = ArcFaceAudioModel(512 + 2, 512, 10034 + 1, )
     metric_func = torch.nn.Softmax(-1)
 
-    logger.info('load model from {}'.format(model_path))
-    state_dict = torch.load(model_path, map_location='cpu')
+    logger.info('load model from {}'.format(load_path))
+    state_dict = torch.load(load_path, map_location='cpu')
     model.load_state_dict(state_dict)
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -80,8 +71,6 @@ if __name__ == '__main__':
     parser.add_argument('--result_root', default='/data/result/', type=str,
                         help='path to save result (default: /data/result/)')
     parser.add_argument('--device', default=None, type=str, help='indices of GPUs to enable (default: all)')
-    parser.add_argument('--epoch', type=int, default=100, help="the epoch num for train (default: 100)")
-    parser.add_argument('--seed', type=int, default=0, help="random seed for multi view (default: 0)")
 
     args = parser.parse_args()
 
@@ -103,7 +92,7 @@ if __name__ == '__main__':
 
     init_logging(log_path)
 
-    all_outputs, all_video_names = main(args.face_root, args.scene_root, args.seed, args.epoch)
+    all_outputs, all_video_names = main(args.face_root, args.scene_root)
 
     top100_value, top100_idxes = torch.topk(all_outputs, 100, dim=0)
     with open(result_log_path, 'w', encoding='utf-8') as f_result_log:

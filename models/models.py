@@ -19,7 +19,7 @@ from .se_resnet import se_resnet50
 __all__ = ['BaseModel', 'ArcFaceModel', 'ArcFaceMaxOutModel', 'ArcFaceMultiModalModel', 'ArcFaceNanModel',
            'ArcFaceNanMaxOutModel', 'ArcFaceVLADModel', 'ArcFaceSimpleModel', 'ArcFaceSEResNetModel',
            'ArcFaceSEResNeXtModel', 'ArcFaceSubModel', 'ArcFaceMultiModalNanModel', 'DenseNetModel',
-           'ArcSceneFeatModel', 'ArcFaceSceneModel', 'ArcFaceSceneNormModel']
+           'ArcSceneFeatModel', 'ArcFaceSceneModel', 'ArcFaceScene512Model', 'ArcFaceAudioModel']
 
 SENET_PATH = './model_zoo/senet50_vggface2.pth'
 SENEXT_PATH = './model_zoo/se_resnext50_32x4d-a260b3a4.pth'
@@ -598,9 +598,9 @@ class ArcFaceSceneModel(nn.Module):
         return output
 
 
-class ArcFaceSceneNormModel(nn.Module):
+class ArcFaceScene512Model(nn.Module):
     def __init__(self, face_dim, scene_dim, out_features):
-        super(ArcFaceSceneNormModel, self).__init__()
+        super(ArcFaceScene512Model, self).__init__()
         self.face_dim = face_dim
         self.scene_dim = scene_dim
         self.out_features = out_features
@@ -644,8 +644,63 @@ class ArcFaceSceneNormModel(nn.Module):
         x_1 = self.nan_layer(feat1)
         x_2 = self.scene_fc(feat2)
 
-        x_2 = (((x_2 - torch.mean(x_2)) / torch.std(x_2)) * torch.std(x_1)) + torch.mean(x_1)
+        x = torch.cat([x_1, x_2], dim=-1)
 
+        output = self.final_fc(x)
+        output = x + output
+
+        output = F.linear(F.normalize(output), F.normalize(self.weight))
+
+        return output
+
+
+class ArcFaceAudioModel(nn.Module):
+    def __init__(self, face_dim, audio_dim, out_features):
+        super(ArcFaceAudioModel, self).__init__()
+        self.face_dim = face_dim
+        self.audio_dim = audio_dim
+        self.out_features = out_features
+
+        self.mma_layer = MultiModalAttentionLayer(40)
+        self.nan_layer = NanAttentionLayer(self.face_dim, 1)
+
+        self.scene_fc = nn.Sequential(nn.Linear(self.audio_dim, self.audio_dim // 2),
+                                      nn.BatchNorm1d(self.audio_dim // 2),
+                                      nn.PReLU(),
+                                      nn.Dropout(),
+                                      nn.Linear(self.audio_dim // 2, self.audio_dim // 4),
+                                      nn.BatchNorm1d(self.audio_dim // 4),
+                                      nn.PReLU(), )
+
+        nn.init.kaiming_normal_(self.scene_fc[0].weight)
+        nn.init.constant_(self.scene_fc[0].bias, .0)
+        nn.init.kaiming_normal_(self.scene_fc[4].weight)
+        nn.init.constant_(self.scene_fc[4].bias, .0)
+
+        self.final_fc = nn.Sequential(nn.Linear(self.face_dim + self.audio_dim // 4,
+                                                (self.face_dim + self.audio_dim // 4) * 2),
+                                      nn.BatchNorm1d((self.face_dim + self.audio_dim // 4) * 2),
+                                      nn.PReLU(),
+                                      nn.Dropout(),
+                                      nn.Linear((self.face_dim + self.audio_dim // 4) * 2,
+                                                self.face_dim + self.audio_dim // 4),
+                                      nn.BatchNorm1d(self.face_dim + self.audio_dim // 4),
+                                      nn.PReLU(), )
+
+        nn.init.kaiming_normal_(self.final_fc[0].weight)
+        nn.init.constant_(self.final_fc[0].bias, .0)
+        nn.init.kaiming_normal_(self.final_fc[4].weight)
+        nn.init.constant_(self.final_fc[4].bias, .0)
+
+        self.weight = Parameter(torch.FloatTensor(self.out_features, self.face_dim + self.audio_dim // 4))
+        nn.init.xavier_uniform_(self.weight)
+
+    def forward(self, feat1, feat2, ):
+        feat1 = self.mma_layer(feat1)
+        x_1 = self.nan_layer(feat1)
+        x_2 = self.scene_fc(feat2)
+
+        x_2 = (((x_2 - torch.mean(x_2)) / torch.std(x_2)) * torch.std(x_1)) + torch.mean(x_1)
         x = torch.cat([x_1, x_2], dim=-1)
 
         output = self.final_fc(x)

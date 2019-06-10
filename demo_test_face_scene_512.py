@@ -14,20 +14,20 @@ import torch
 from torch.utils.data import DataLoader
 
 from datasets import IQiYiFaceSceneDataset
-from models import ArcFaceSceneNormModel
+from models import ArcFaceScene512Model
 from utils import check_exists, init_logging
 
 logger = logging.getLogger(__name__)
 
 
 def main(face_root, scene_root):
-    load_path = './checkpoints/demo_arcface_face+scene_norm_model_0100.pth'
+    load_path = './checkpoints/demo_arcface_face+scene_512_model_0100.pth'
     assert check_exists(load_path)
 
     dataset = IQiYiFaceSceneDataset(face_root, scene_root, 'test', num_frame=40, )
     data_loader = DataLoader(dataset, batch_size=16384, shuffle=False, num_workers=0)
 
-    model = ArcFaceSceneNormModel(512 + 2, 2048, 10034 + 1, )
+    model = ArcFaceScene512Model(512 + 2, 2048, 10034 + 1, )
     metric_func = torch.nn.Softmax(-1)
 
     logger.info('load model from {}'.format(load_path))
