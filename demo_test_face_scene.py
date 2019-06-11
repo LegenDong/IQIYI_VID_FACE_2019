@@ -25,7 +25,7 @@ def main(face_root, scene_root):
     assert check_exists(load_path)
 
     dataset = IQiYiFaceSceneDataset(face_root, scene_root, 'test', num_frame=40, )
-    data_loader = DataLoader(dataset, batch_size=16384, shuffle=False, num_workers=0)
+    data_loader = DataLoader(dataset, batch_size=16384, shuffle=False, num_workers=4)
 
     model = ArcFaceSceneModel(512 + 2, 2048, 10034 + 1, )
     metric_func = torch.nn.Softmax(-1)

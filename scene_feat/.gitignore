@@ -1,0 +1,5 @@
+# Created by .ignore support plugin (hsz.mobi)
+scene_infos_train.pickle
+scene_infos_val.pickle
+train_gt.txt
+val_gt.txt

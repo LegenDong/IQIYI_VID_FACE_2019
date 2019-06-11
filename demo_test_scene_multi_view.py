@@ -25,8 +25,6 @@ def main(data_root, seed, epoch):
 
     with open(mask_path, 'rb') as fin:
         mask_index = pickle.load(fin, encoding='bytes')
-    print('=' * 10)
-    print(seed)
 
     model_path = './checkpoints/multi_view_scene/demo_arcface_scene_multi_view_{}_model_{:0>4d}.pth'.format(seed, epoch)
     assert check_exists(model_path)

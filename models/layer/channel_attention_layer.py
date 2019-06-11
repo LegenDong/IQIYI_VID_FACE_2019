@@ -2,7 +2,7 @@
 # @Time    : 2019/5/11 14:44
 # @Author  : LegenDong
 # @User    : legendong
-# @File    : non_local_layer.py
+# @File    : channel_attention_layer.py
 # @Software: PyCharm
 import torch
 
@@ -86,10 +86,3 @@ class MultiModalAttentionLayer(nn.Module):
         out = y + x
 
         return out
-
-
-if __name__ == '__main__':
-    img = torch.zeros(2, 4, 512)
-    net = MultiModalAttentionLayer(4, 4)
-    out = net(img)
-    print(out.size())

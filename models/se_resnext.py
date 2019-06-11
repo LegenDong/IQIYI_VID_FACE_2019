@@ -5,7 +5,7 @@
 # @File    : se_resnext.py
 # @Software: PyCharm
 """
-get the code and model from:
+get the code and pre_trained model from:
 https://github.com/Cadene/pretrained-models.pytorch/blob/master/pretrainedmodels/models/senet.py
 """
 import math

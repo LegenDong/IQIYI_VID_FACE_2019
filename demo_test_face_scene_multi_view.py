@@ -27,8 +27,7 @@ def main(face_root, scene_root, seed, epoch):
 
     with open(mask_path, 'rb') as fin:
         face_mask_index, scene_mask_index = pickle.load(fin, encoding='bytes')
-    print(face_mask_index)
-    print(scene_mask_index)
+
     model_path = './checkpoints/multi_view_face_scene/demo_arcface_face+scene_nan_{}_model_{:0>4d}.pth' \
         .format(seed, epoch)
     assert check_exists(model_path)
@@ -36,7 +35,7 @@ def main(face_root, scene_root, seed, epoch):
     dataset = IQiYiFaceSceneDataset(face_root, scene_root, 'test', num_frame=40,
                                     transform=sep_cat_qds_select_face_scene_transforms, face_mask=face_mask_index,
                                     scene_mask=scene_mask_index)
-    data_loader = DataLoader(dataset, batch_size=16384, shuffle=False, num_workers=0)
+    data_loader = DataLoader(dataset, batch_size=16384, shuffle=False, num_workers=4)
 
     model = ArcFaceSceneModel(len(face_mask_index) + 2, len(scene_mask_index), 10034 + 1, )
     metric_func = torch.nn.Softmax(-1)
