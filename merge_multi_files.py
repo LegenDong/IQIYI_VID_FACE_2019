@@ -28,7 +28,7 @@ if __name__ == '__main__':
 
     init_logging(log_path)
 
-    assert args.merge_type in ['face', 'scene', 'face_scene']
+    assert args.merge_type in ['face', 'scene', 'face_scene', 'face_scene_512']
     if args.merge_type == 'face':
         pickle_root = FACE_PICKLE_ROOT
     elif args.merge_type == 'scene':

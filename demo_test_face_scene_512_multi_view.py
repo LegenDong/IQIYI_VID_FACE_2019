@@ -36,7 +36,7 @@ def main(face_root, scene_root, seed, epoch):
     dataset = IQiYiFaceSceneDataset(face_root, scene_root, 'test', num_frame=40,
                                     transform=sep_cat_qds_select_face_scene_transforms, face_mask=face_mask_index,
                                     scene_mask=scene_mask_index)
-    data_loader = DataLoader(dataset, batch_size=16384, shuffle=False, num_workers=4)
+    data_loader = DataLoader(dataset, batch_size=16384, shuffle=False, num_workers=0)
 
     model = ArcFaceScene512Model(len(face_mask_index) + 2, len(scene_mask_index), 10034 + 1, )
     metric_func = torch.nn.Softmax(-1)
