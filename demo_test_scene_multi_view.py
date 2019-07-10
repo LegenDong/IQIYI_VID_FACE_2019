@@ -32,7 +32,7 @@ def main(data_root, seed, epoch):
     dataset = IQiYiSceneFeatDataset(data_root, 'test', mask_index=mask_index,
                                     transform=default_sep_select_scene_feat_transforms)
 
-    data_loader = DataLoader(dataset, batch_size=16384, shuffle=False, num_workers=0)
+    data_loader = DataLoader(dataset, batch_size=16384, shuffle=False, num_workers=4)
 
     model = ArcSceneFeatModel(len(mask_index), 10034 + 1)
     metric_func = torch.nn.Softmax(-1)

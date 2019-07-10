@@ -14,8 +14,7 @@ import torch
 
 __all__ = ['init_logging', 'check_exists', 'load_train_gt_from_txt', 'load_val_gt_from_txt', 'load_face_from_pickle',
            'default_get_result', 'default_face_scene_target_transforms', 'save_model', 'topk_func',
-           'default_vid_transforms',
-           'prepare_device', 'default_scene_pre_progress', 'default_scene_transforms',
+           'default_vid_transforms', 'prepare_device', 'default_scene_pre_progress', 'default_scene_transforms',
            'default_scene_target_transforms', 'default_scene_remove_noise_in_val', 'merge_multi_view_result',
            'get_mask_index', 'load_scene_infos', 'default_scene_feat_pre_progress', 'default_scene_feat_remove_noise',
            'default_scene_feat_transforms', 'default_scene_feat_target_transforms', 'split_name_by_l2norm',

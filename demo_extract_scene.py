@@ -32,7 +32,7 @@ def main(args):
         logger.error('the size of the dataset for extract scene feat cannot be {}'.format(len(dataset)))
     else:
         logger.info('the size of the dataset for extract scene feat is {}'.format(len(dataset)))
-    data_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=False, num_workers=0, pin_memory=True)
+    data_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=False, num_workers=4, pin_memory=True)
 
     log_step = len(data_loader) // 100 if len(data_loader) > 100 else 1
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')

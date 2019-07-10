@@ -12,12 +12,11 @@ from torch.utils import data
 from torchvision import transforms
 
 from utils import load_face_from_pickle, load_train_gt_from_txt, check_exists, default_face_scene_target_transforms, \
-    load_val_gt_from_txt, \
-    default_scene_pre_progress, default_scene_transforms, \
-    default_scene_target_transforms, load_scene_infos, default_scene_feat_pre_progress, \
-    default_scene_feat_remove_noise, default_scene_feat_transforms, default_scene_feat_target_transforms, \
-    default_fine_tune_pre_progress, default_fine_tune_transforms, default_fine_tune_target_transforms, \
-    default_face_scene_pre_progress, sep_cat_qds_face_scene_transforms, default_face_scene_remove_noise_in_val
+    load_val_gt_from_txt, default_scene_pre_progress, default_scene_transforms, default_scene_target_transforms, \
+    load_scene_infos, default_scene_feat_pre_progress, default_scene_feat_remove_noise, default_scene_feat_transforms, \
+    default_scene_feat_target_transforms, default_fine_tune_pre_progress, default_fine_tune_transforms, \
+    default_fine_tune_target_transforms, default_face_scene_pre_progress, sep_cat_qds_face_scene_transforms, \
+    default_face_scene_remove_noise_in_val
 
 __all__ = ['IQiYiExtractSceneDataset', 'IQiYiSceneFeatDataset', 'IQiYiFineTuneSceneDataset', 'IQiYiFaceSceneDataset', ]
 
